@@ -44,13 +44,18 @@ export default function Landing() {
           <span>Structured for FAANG interviews</span>
         </motion.div>
 
-        <h1 className="heading-xl mb-5" style={{ maxWidth: 600, margin: '0 auto 20px' }}>
-          The complete path to{' '}
-          <span className="gradient-accent">Data Engineering</span>{' '}
-          mastery
+        <h1 className="mb-6" style={{ maxWidth: 800, margin: '0 auto 24px', fontFamily: 'var(--font-serif)', fontSize: 'clamp(3rem, 8vw, 5.5rem)', lineHeight: 1.05, letterSpacing: '-0.02em', fontWeight: 400 }}>
+          The complete path to <br />
+          Data Engineering <br />
+          <span className="relative inline-block mt-2">
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[160%] blur-[40px] opacity-60 pointer-events-none" style={{ background: 'radial-gradient(ellipse, rgba(168,85,247,0.4) 0%, rgba(234,88,12,0.3) 50%, transparent 80%)', zIndex: 0 }}></span>
+            <span className="italic relative z-10" style={{ fontFamily: 'var(--font-serif)', background: 'linear-gradient(135deg, #a855f7, #ea580c)', WebkitBackgroundClip: 'text', color: 'transparent', display: 'inline-block', paddingRight: '0.1em' }}>
+              mastery
+            </span>
+          </span>
         </h1>
 
-        <p className="text-body mb-8" style={{ maxWidth: 520, margin: '0 auto 32px', fontSize: '1rem', lineHeight: 1.7 }}>
+        <p className="text-body mb-8" style={{ maxWidth: 580, margin: '0 auto 40px', fontSize: '1.1rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
           From SQL fundamentals to distributed systems — a structured roadmap with progress tracking, curated resources, and interview prep.
         </p>
 

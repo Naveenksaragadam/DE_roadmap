@@ -5,23 +5,19 @@
    ============================================ */
 
 :root {
-  /* Surface colors — warm light mode */
-  --bg-primary: #f8fafc; /* slightly cooler off-white to make colors pop */
-  --bg-secondary: #f1f5f9;
-  --bg-surface: rgba(255, 255, 255, 0.85); /* added transparency for glassmorphism */
-  --bg-surface-hover: rgba(248, 250, 252, 0.9);
-  --bg-surface-active: #e2e8f0;
-  --bg-elevated: rgba(255, 255, 255, 0.95);
-  --bg-inset: rgba(241, 245, 249, 0.5);
-  --bg-overlay: rgba(0, 0, 0, 0.4);
+  /* Surface colors — Creative Engineer Light Mode */
+  --bg-primary: #ffffff; /* Stark white for punchy contrast */
+  --bg-secondary: #f9fafb;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #fcfcfc;
+  --bg-surface-active: #f1f5f9;
+  --bg-elevated: #ffffff;
+  --bg-inset: #f3f4f6;
+  --bg-overlay: rgba(17, 24, 39, 0.4);
 
-  /* Premium Global Backgrounds */
-  --bg-mesh: 
-    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(20, 184, 166, 0.15) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
-  --bg-pattern: url("data:image/svg+xml,%3Csvg width='30' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='rgba(0,0,0,0.05)'/%3E%3C/svg%3E");
+  /* Graph-paper style grid background */
+  --bg-grid-color: rgba(0, 0, 0, 0.04);
+  --bg-pattern: linear-gradient(to right, var(--bg-grid-color) 1px, transparent 1px), linear-gradient(to bottom, var(--bg-grid-color) 1px, transparent 1px);
 
 
   /* Text colors */
@@ -31,17 +27,17 @@
   --text-inverse: #fafaf9;
 
   /* Border colors */
-  --border-default: #e7e5e4;
-  --border-subtle: #f0eeec;
-  --border-strong: #d6d3d1;
-  --border-interactive: #7c3aed;
+  --border-default: #e5e7eb;
+  --border-subtle: #f3f4f6;
+  --border-strong: #d1d5db;
+  --border-interactive: #2563eb;
 
-  /* Accent colors — refined palette */
-  --accent: #7c3aed;
-  --accent-hover: #6d28d9;
-  --accent-subtle: rgba(124, 58, 237, 0.08);
-  --accent-muted: rgba(124, 58, 237, 0.15);
-  --accent-text: #7c3aed;
+  /* Accent colors — crisp blue palette */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-subtle: #eff6ff;
+  --accent-muted: #dbeafe;
+  --accent-text: #1e40af;
 
   --success: #16a34a;
   --success-subtle: rgba(22, 163, 74, 0.08);
@@ -58,17 +54,18 @@
   --tier-4: #16a34a;
   --tier-4-subtle: rgba(22, 163, 74, 0.08);
 
-  /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
-  --shadow-card-hover: 0 12px 24px -4px rgba(0, 0, 0, 0.1);
+  /* Shadows - Crisp, elegant structural shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
 
   /* Typography */
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Radii */
   --radius-sm: 8px;
@@ -89,39 +86,35 @@
    ============================================ */
 
 [data-theme="dark"] {
-  --bg-primary: #020617; /* Slate 950 */
-  --bg-secondary: #0f172a;
-  --bg-surface: rgba(15, 23, 42, 0.6); /* added transparency for glassmorphism */
-  --bg-surface-hover: rgba(30, 41, 59, 0.8);
-  --bg-surface-active: #334155;
-  --bg-elevated: rgba(30, 41, 59, 0.9);
-  --bg-inset: rgba(2, 6, 23, 0.5);
-  --bg-overlay: rgba(0, 0, 0, 0.7);
+  /* Creative Engineer Dark Mode */
+  --bg-primary: #0a0a0a; /* Pitch dark */
+  --bg-secondary: #111111;
+  --bg-surface: #111111;
+  --bg-surface-hover: #1a1a1a;
+  --bg-surface-active: #222222;
+  --bg-elevated: #1a1a1a;
+  --bg-inset: #050505;
+  --bg-overlay: rgba(0, 0, 0, 0.8);
 
-  /* Premium Global Backgrounds */
-  --bg-mesh: 
-    radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.2) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.2) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
-    radial-gradient(at 0% 100%, rgba(14, 165, 233, 0.15) 0px, transparent 50%);
-  --bg-pattern: url("data:image/svg+xml,%3Csvg width='30' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='rgba(255,255,255,0.06)'/%3E%3C/svg%3E");
+  /* Graph-paper style grid background for dark mode */
+  --bg-grid-color: rgba(255, 255, 255, 0.04);
+  --bg-pattern: linear-gradient(to right, var(--bg-grid-color) 1px, transparent 1px), linear-gradient(to bottom, var(--bg-grid-color) 1px, transparent 1px);
 
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-inverse: #111827;
 
-  --text-primary: #fafaf9;
-  --text-secondary: #a8a29e;
-  --text-muted: #78716c;
-  --text-inverse: #1c1917;
+  --border-default: #374151;
+  --border-subtle: #1f2937;
+  --border-strong: #4b5563;
+  --border-interactive: #60a5fa;
 
-  --border-default: #292524;
-  --border-subtle: #1c1917;
-  --border-strong: #44403c;
-  --border-interactive: #8b5cf6;
-
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-subtle: rgba(139, 92, 246, 0.1);
-  --accent-muted: rgba(139, 92, 246, 0.2);
-  --accent-text: #a78bfa;
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-subtle: rgba(59, 130, 246, 0.15);
+  --accent-muted: rgba(59, 130, 246, 0.25);
+  --accent-text: #93c5fd;
 
   --success: #22c55e;
   --success-subtle: rgba(34, 197, 94, 0.12);
@@ -135,12 +128,13 @@
   --tier-4: #4ade80;
   --tier-4-subtle: rgba(74, 222, 128, 0.1);
 
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
-  --shadow-card-hover: 0 12px 24px -4px rgba(0, 0, 0, 0.4);
+  /* Shadows - Generic deep shadows for dark mode */
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
 }
 
 /* ============================================
@@ -161,11 +155,11 @@ body {
   padding: 0;
   min-height: 100vh;
   background-color: var(--bg-primary);
-  background-image: var(--bg-pattern), var(--bg-mesh); /* Pattern over mesh */
-  background-attachment: fixed, fixed;
-  background-size: 30px 30px, 100vw 100vh;
-  background-position: center, top left;
-  background-repeat: repeat, no-repeat;
+  background-image: var(--bg-pattern); 
+  background-attachment: fixed;
+  background-size: 40px 40px; /* Essential for graph paper look */
+  background-position: center top;
+  background-repeat: repeat;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -206,18 +200,18 @@ body {
 .skip-link:focus { top: 0; }
 
 /* ============================================
-   CARD SYSTEM — Hierarchy
+   CLEAN STRUCTURAL CARD SYSTEM
    ============================================ */
 
 /* Base card */
 .card {
   background: var(--bg-surface);
-  backdrop-filter: blur(12px); /* Glassmorphism */
-  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-base);
+  position: relative;
+  overflow: hidden;
 }
 
 /* Interactive card — elevates on hover */
@@ -230,11 +224,11 @@ body {
   transform: translateY(-2px);
 }
 
-/* Elevated card — already lifted */
+/* Elevated card */
 .card-elevated {
   background: var(--bg-elevated);
-  box-shadow: var(--shadow-md);
-  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
 }
 
 /* Inset card — recessed */
