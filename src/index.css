@@ -6,14 +6,23 @@
 
 :root {
   /* Surface colors — warm light mode */
-  --bg-primary: #fafaf9;
-  --bg-secondary: #f5f5f4;
-  --bg-surface: #ffffff;
-  --bg-surface-hover: #f5f5f4;
-  --bg-surface-active: #e7e5e4;
-  --bg-elevated: #ffffff;
-  --bg-inset: #f0eeec;
+  --bg-primary: #f8fafc; /* slightly cooler off-white to make colors pop */
+  --bg-secondary: #f1f5f9;
+  --bg-surface: rgba(255, 255, 255, 0.85); /* added transparency for glassmorphism */
+  --bg-surface-hover: rgba(248, 250, 252, 0.9);
+  --bg-surface-active: #e2e8f0;
+  --bg-elevated: rgba(255, 255, 255, 0.95);
+  --bg-inset: rgba(241, 245, 249, 0.5);
   --bg-overlay: rgba(0, 0, 0, 0.4);
+
+  /* Premium Global Backgrounds */
+  --bg-mesh: 
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.15) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(20, 184, 166, 0.15) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+  --bg-pattern: url("data:image/svg+xml,%3Csvg width='30' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1.5' fill='rgba(0,0,0,0.05)'/%3E%3C/svg%3E");
+
 
   /* Text colors */
   --text-primary: #1c1917;
@@ -80,14 +89,23 @@
    ============================================ */
 
 [data-theme="dark"] {
-  --bg-primary: #0c0a09;
-  --bg-secondary: #1c1917;
-  --bg-surface: #1c1917;
-  --bg-surface-hover: #292524;
-  --bg-surface-active: #44403c;
-  --bg-elevated: #292524;
-  --bg-inset: #0c0a09;
+  --bg-primary: #020617; /* Slate 950 */
+  --bg-secondary: #0f172a;
+  --bg-surface: rgba(15, 23, 42, 0.6); /* added transparency for glassmorphism */
+  --bg-surface-hover: rgba(30, 41, 59, 0.8);
+  --bg-surface-active: #334155;
+  --bg-elevated: rgba(30, 41, 59, 0.9);
+  --bg-inset: rgba(2, 6, 23, 0.5);
   --bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /* Premium Global Backgrounds */
+  --bg-mesh: 
+    radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.2) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.2) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(14, 165, 233, 0.15) 0px, transparent 50%);
+  --bg-pattern: url("data:image/svg+xml,%3Csvg width='30' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='rgba(255,255,255,0.06)'/%3E%3C/svg%3E");
+
 
   --text-primary: #fafaf9;
   --text-secondary: #a8a29e;
@@ -141,7 +159,13 @@ html {
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg-primary);
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  background-image: var(--bg-pattern), var(--bg-mesh); /* Pattern over mesh */
+  background-attachment: fixed, fixed;
+  background-size: 30px 30px, 100vw 100vh;
+  background-position: center, top left;
+  background-repeat: repeat, no-repeat;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 15px;
@@ -149,7 +173,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  transition: background var(--transition-slow), color var(--transition-slow);
+  transition: background-color var(--transition-slow), color var(--transition-slow);
 }
 
 /* Scrollbar */
@@ -188,6 +212,8 @@ body {
 /* Base card */
 .card {
   background: var(--bg-surface);
+  backdrop-filter: blur(12px); /* Glassmorphism */
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
