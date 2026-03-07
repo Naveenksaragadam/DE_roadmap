@@ -30,7 +30,7 @@ export default function Layout() {
   const collapsed = !state.sidebarOpen;
 
   return (
-    <div className="flex min-h-screen" style={{ background: 'var(--bg-primary)' }}>
+    <div className="flex min-h-screen bg-transparent">
       <a href="#main" className="skip-link">Skip to main content</a>
 
       {/* Sidebar */}
@@ -42,6 +42,8 @@ export default function Layout() {
         style={{
           background: 'var(--bg-surface)',
           borderRight: '1px solid var(--border-default)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)'
         }}
       >
         {/* Brand */}
