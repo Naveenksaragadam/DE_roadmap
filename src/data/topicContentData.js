@@ -7,6 +7,11 @@ import { dsaContent } from './topicContent/dsaContent';
 import { dsaContent2 } from './topicContent/dsaContent2';
 import { linuxContent } from './topicContent/linuxContent';
 import { gitContent } from './topicContent/gitContent';
+import { sparkContent } from './topicContent/sparkContent';
+import { sparkContent2 } from './topicContent/sparkContent2';
+import { warehouseContent } from './topicContent/warehouseContent';
+import { warehouseContent2 } from './topicContent/warehouseContent2';
+import { dockerContent } from './topicContent/dockerContent';
 
 export const topicContentData = {
   ...sqlContent,
@@ -17,4 +22,9 @@ export const topicContentData = {
   ...dsaContent2,
   ...linuxContent,
   ...gitContent,
+  ...sparkContent,
+  ...sparkContent2,
+  ...warehouseContent,
+  ...warehouseContent2,
+  ...dockerContent,
 };
