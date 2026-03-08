@@ -87,8 +87,11 @@ export default function Resources() {
         {filtered.map(r => {
           const TypeIcon = getIcon(resourceTypeIcons[r.type] || 'circle');
           const tc = tierFilters.find(t => t.id === r.tier)?.color || 'var(--accent)';
+          // Sanitize URL to prevent javascript: XSS
+          const safeUrl = (r.url && (r.url.startsWith('http://') || r.url.startsWith('https://'))) ? r.url : '#';
+          
           return (
-            <motion.a key={r.id} href={r.url} target="_blank" rel="noopener noreferrer"
+            <motion.a key={r.id} href={safeUrl} target="_blank" rel="noopener noreferrer"
               className="card card-interactive p-5 no-underline block" variants={fadeUp}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div className="w-9 h-9 rounded-lg flex items-center justify-center"
