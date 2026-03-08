@@ -98,8 +98,10 @@ export default function Resources() {
                 <Icons.ExternalLink size={13} style={{ color: 'var(--text-muted)' }} />
               </div>
               <h3 className="heading-md mb-0.5" style={{ fontSize: 14 }}>{r.title}</h3>
-              <div className="text-caption mb-2">{r.author}</div>
-              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>{r.description}</p>
+              <div className="text-caption mb-2">{String(r.author)}</div>
+              <p className="text-sm mb-3" style={{ color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                {String(r.description)}
+              </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="badge" style={{ background: `color-mix(in srgb, ${tc} 10%, transparent)`, color: tc }}>
                   {r.tier.replace('-', ' ')}
