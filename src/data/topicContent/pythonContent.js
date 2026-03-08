@@ -276,4 +276,326 @@ event = OrderEvent(order_id=1, customer_id=42, amount=99.99, created_at="2024-01
       tips: ['Pydantic v2 is 5-50x faster than v1 — always use v2 for new projects'],
     },
   },
+  'python-de-6': {
+    tutorial: {
+      explanation: [
+        'Performance optimization in Python involves understanding vectorization, memory profiling, and choosing the right concurrency model (multiprocessing vs threading).',
+        'Because of the Global Interpreter Lock (GIL), threading in Python is only useful for I/O-bound tasks (like waiting on network responses). For CPU-bound tasks (complex calculations, parsing huge files), you must use multiprocessing to utilize multiple CPU cores.',
+        'Vectorization involves bypassing Python loops entirely and letting underlying C libraries (like NumPy/Pandas native methods) execute operations in bulk.'
+      ],
+      codeExamples: [
+        { description: 'Multiprocessing vs Threading', code: `import concurrent.futures
+import time
+
+def cpu_bound_task(data_chunk):
+    # e.g., heavy math, complex JSON parsing
+    return sum(i * i for i in data_chunk)
+
+def process_heavy_data(data_chunks):
+    # Use ProcessPool for CPU-bound tasks (bypasses GIL)
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        results = list(executor.map(cpu_bound_task, data_chunks))
+    return results
+
+def io_bound_task(url):
+    # e.g., downloading files, API calls
+    import requests
+    return requests.get(url).status_code
+
+def process_api_calls(urls):
+    # Use ThreadPool for I/O-bound tasks
+    with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+        results = list(executor.map(io_bound_task, urls))
+    return results` },
+      ],
+      keyTakeaways: [
+        'Stop using standard `for` loops on large lists of numbers; use numpy arrays or pandas Series operations instead (vectorization).',
+        'Threading is for I/O tasks. Multiprocessing is for CPU tasks. Using Threading for CPU tasks actually makes Python slower due to GIL contention.',
+        'Use the `memory_profiler` library (`@profile` decorator) to find exactly which lines are eating up RAM in your pipeline.',
+      ],
+    },
+    crashCourse: {
+      summary: 'Optimize Python data pipelines by vectorizing math/string operations, using ThreadPools for API calls, and ProcessPools for heavy parsing.',
+      quickFacts: [
+        'GIL: Global Interpreter Lock. Prevents multiple Python threads from executing Python bytecodes at once.',
+        '`concurrent.futures`: The modern way to handle multi-threading/processing in standard library.',
+        'Vectorization: Submitting a single array operation to C instead of looping in Python.',
+      ],
+      tips: [
+        'When using `multiprocessing`, chunk your data so the IPC (Inter-Process Communication) overhead doesn\'t ruin your performance gains.',
+      ],
+    },
+  },
+  'python-de-7': {
+    tutorial: {
+      explanation: [
+        'Proper packaging ensures your data pipelines are reproducible across environments (Dev vs Prod, Mac vs Linux). The standard modern approach replaces random `requirements.txt` files with `pyproject.toml` using tools like Poetry or modern pip.',
+        'Virtual environments prevent dependency hell (e.g. Airflow needs SQLAlchemy 1.4, but your custom script needs 2.0). Poetry handles dependency resolution, locking, and virtual environments all in one tool.',
+      ],
+      codeExamples: [
+        { description: 'Modern Python Packaging (pyproject.toml)', code: `# Example pyproject.toml configuration using Poetry
+[tool.poetry]
+name = "my-data-pipeline"
+version = "0.1.0"
+description = "ETL pipeline for customer data"
+authors = ["Data Engineer <de@company.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.0.0"
+sqlalchemy = "^2.0.15"
+pydantic = "^2.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.3.1"
+black = "^23.3.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"` },
+      ],
+      keyTakeaways: [
+        '`pyproject.toml` is the PEP 518 standard. It replaces `setup.py` and `requirements.txt`.',
+        'Requirements lock files (`poetry.lock` or `Pipfile.lock`) guarantee that Prod installs the exact same sub-dependency versions that you tested in Dev.',
+        'Avoid installing global pip packages. Every project should have an isolated `venv`.',
+      ],
+    },
+    crashCourse: {
+      summary: 'Use Poetry and `pyproject.toml` to manage dependencies cleanly. Lockfiles guarantee deterministic builds across environments.',
+      quickFacts: [
+        '`pyproject.toml`: The configuration file containing project metadata and dependencies.',
+        'Lockfile: Contains the exact resolved hashes and versions of every recursive dependency.',
+        'Virtual Environment (`venv`): An isolated python binary and `site-packages` directory.',
+      ],
+      tips: [
+        'In Dockerfiles, you can use `pip install -r <(poetry export -f requirements.txt)` to install dependencies without installing Poetry itself in the production container.',
+      ],
+    },
+  },
+  'python-de-8': {
+    tutorial: {
+      explanation: [
+        'Data Engineers frequently extract data from REST APIs. Because APIs fail, rate-limit, and paginate, your extraction code must handle these gracefully. Using `requests` with robust retry logic (via `urllib3` or `tenacity`) is essential.',
+        'Pagination implies fetching multiple "pages" of records. Rate limiting requires tracking your request speed or responding dynamically to `HTTP 429 Too Many Requests`.',
+      ],
+      codeExamples: [
+        { description: 'Robust API Extraction with Retries', code: `import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+def get_robust_session():
+    session = requests.Session()
+    # Retry on 429 (Rate Limit), 500, 502, 503, 504
+    retry_strategy = Retry(
+        total=5,
+        backoff_factor=1, # 1s, 2s, 4s, 8s, 16s...
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+def fetch_all_pages(base_url, endpoint):
+    session = get_robust_session()
+    all_records = []
+    url = f"{base_url}/{endpoint}"
+    
+    while url:
+        response = session.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        all_records.extend(data.get('results', []))
+        
+        # Follow the 'next' URL link typically provided in APIs
+        url = data.get('next') 
+        
+    return all_records` },
+      ],
+      keyTakeaways: [
+        'Never write raw `requests.get()` without wrapping it in retry logic for production pipelines. Network blips happen constantly.',
+        'Use Exponential Backoff. If an API is overwhelmed, spamming it instantly will just get you blocked. Wait 1 second, then 2, then 4.',
+        '`requests.Session()` reuses the underlying TCP connection, speeding up multiple requests significantly.',
+      ],
+    },
+    crashCourse: {
+      summary: 'API ingestion requires handling pagination and temporary failures. Use `requests.Session` with `urllib3.util.retry` to automatically handle HTTP 429s and 5xx errors with exponential backoff.',
+      quickFacts: [
+        'HTTP 429: Too Many Requests. You are rate-limited.',
+        'Exponential Backoff: Doubling the wait time between retry attempts.',
+        'TCP Connection Pooling: Achieved by using `requests.Session()`.',
+      ],
+      tips: [
+        'If an API returns a `Retry-After` header during a 429, `urllib3` will automatically respect it if you configure the Retry adapter correctly!',
+      ],
+    },
+  },
+  'python-de-9': {
+    tutorial: {
+      explanation: [
+        'Silent failures corrupt data lakes. A good DE pipeline explicitly defines custom exceptions, logs structured error metadata, and raises alerts rather than quietly skipping bad data.',
+        'Using the built-in `logging` module properly (with formatters and handlers) instead of `print()` ensures your Airflow/CloudWatch logs are searchable. Structured JSON logging is becoming the industry standard so tools like Datadog/ELK can parse the logs.',
+      ],
+      codeExamples: [
+        { description: 'Custom Exceptions and Logging', code: `import logging
+import json
+
+# Setup structured console logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("sales_pipeline")
+
+# Custom Exceptions categorize failures properly!
+class PipelineError(Exception): pass
+class DataQualityError(PipelineError): pass
+class APIConnectionError(PipelineError): pass
+
+def process_file(file_path):
+    try:
+        # simulate reading
+        if "corrupt" in file_path:
+            raise DataQualityError(f"Missing mandatory 'user_id' in {file_path}")
+            
+    except DataQualityError as e:
+        # We might log this but NOT stop the whole pipeline
+        logger.error(json.dumps({
+            "event": "data_quality_failure",
+            "file": file_path,
+            "error": str(e)
+        }))
+        # Optional: send to Dead Letter Queue (DLQ)
+    except Exception as e:
+        # Unexpected errors SHOULD stop the pipeline
+        logger.critical(f"Unexpected crash processing {file_path}: {e}")
+        raise` },
+      ],
+      keyTakeaways: [
+        'Create custom Exception classes spanning from `DataQualityError` to `DatabaseTimeout`. It makes `try/except` blocks much cleaner than catching base `Exception`.',
+        'Use Structured Logging (JSON strings in log messages) so massive log aggregators can filter errors by exact machine, file, or job_id.',
+        'Handle anticipated errors (like one bad row) by sending it to a Dead Letter file, but raise unexpected errors so the pipeline genuinely fails.',
+      ],
+    },
+    crashCourse: {
+      summary: 'Avoid `print()`; use `logging`. Group related pipeline failures using custom Exception classes. Use JSON formatted logging so downstream monitoring tools can parse error metadata.',
+      quickFacts: [
+        '`logging.getLogger(__name__)`: Standard way to instantiate a logger per file.',
+        'Log Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL.',
+        'Dead Letter Queue (DLQ): A destination (file/table) for rows that failed validation, allowing the pipeline to continue.',
+      ],
+      tips: [
+        'Call `logger.exception("message")` inside an `except` block. It automatically attaches the full stack trace to the log message!',
+      ],
+    },
+  },
+  'python-de-10': {
+    tutorial: {
+      explanation: [
+        'Data Validation pipelines ensure that "Trash" doesn\'t get loaded into your warehouse (Garbage In, Garbage Out). Tools like Pandera (DataFrame validation) or Great Expectations (enterprise data testing) define explicit schemas and checks.',
+        'These tools check for Nulls in strictly non-null columns, value ranges (age > 0), referential integrity, and correct string formats via regex.',
+      ],
+      codeExamples: [
+        { description: 'DataFrame Validation with Pandera', code: `import pandas as pd
+import pandera as pa
+from pandera import Column, Check
+
+# Define a strict schema for your incoming CSV/DataFrame
+sales_schema = pa.DataFrameSchema({
+    "transaction_id": Column(int, unique=True),
+    "user_id": Column(int, Check.greater_than(0)),
+    "amount": Column(float, Check.ge(0.0)),
+    "status": Column(str, Check.isin(["completed", "pending", "failed"])),
+    "email": Column(str, Check.str_matches(r"^\\S+@\\S+\\.\\S+$"), nullable=True)
+})
+
+# Incoming data
+df = pd.DataFrame({
+    "transaction_id": [1, 2],
+    "user_id": [101, -5], # -5 will fail!
+    "amount": [50.5, 20.0],
+    "status": ["completed", "unknown"], # 'unknown' will fail!
+    "email": ["test@test.com", None]
+})
+
+try:
+    validated_df = sales_schema.validate(df, lazy=True)
+except pa.errors.SchemaErrors as err:
+    print("Data Validation Failed! Issues found:")
+    print(err.failure_cases)` },
+      ],
+      keyTakeaways: [
+        'Pandera is lightweight and perfect for in-memory Python scripts evaluating Pandas/Polars dataframes.',
+        'Great Expectations is a heavy-duty framework perfect for scanning massive SQL tables dynamically in Airflow/dbt prior to moving data to Prod.',
+        'Using `lazy=True` in Pandera collects ALL errors before crashing, rather than stopping at the very first bad row.',
+      ],
+    },
+    crashCourse: {
+      summary: 'Validate incoming data strictly to prevent data warehouse corruption. Use Pandera for quick DataFrame checks and Great Expectations for massive warehouse/lake validation.',
+      quickFacts: [
+        'Schema Validation: Checking types, ranges, uniqueness, and regex matching.',
+        'Pandera: Fast, Pythonic DataFrame validation (Pandas/Polars/PySpark).',
+        'Great Expectations: Declarative JSON-based data testing for large platforms.',
+      ],
+      tips: [
+        'Run your data validation *after* generic extraction but *before* transformation/loading. Halt the pipeline if the source schema drifted.',
+      ],
+    },
+  },
+  'python-de-11': {
+    tutorial: {
+      explanation: [
+        'Data Engineers write a lot of ad-hoc scripts to backfill data, trigger jobs, or clean buckets. Turning these scripts into proper Command Line Interfaces (CLIs) makes them reusable across the team without hardcoding variables.',
+        'The `Click` library or its modern wrapper `Typer` (by the creator of FastAPI) uses Python Type Hints to automatically generate CLI arguments, options, and help menus.',
+      ],
+      codeExamples: [
+        { description: 'Building a Pipeline CLI with Typer', code: `import typer
+from datetime import datetime
+from typing import Optional
+
+app = typer.Typer(help="Data Engineering Pipeline CLI")
+
+@app.command()
+def backfill(
+    table: str = typer.Argument(..., help="The target warehouse table"),
+    start_date: datetime = typer.Option(..., "--start", formats=["%Y-%m-%d"]),
+    end_date: datetime = typer.Option(..., "--end", formats=["%Y-%m-%d"]),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing data")
+):
+    """
+    Run a historical backfill for a specific table.
+    """
+    typer.echo(f"Starting backfill for {table}")
+    typer.echo(f"Range: {start_date.date()} to {end_date.date()}")
+    if force:
+        typer.secho("FORCE MODE ACTIVE: Overwriting data!", fg=typer.colors.RED)
+    
+    # run_backfill(table, start_date, end_date, force)
+
+if __name__ == "__main__":
+    app()
+
+# Using it in terminal:
+# python cli.py backfill users --start 2024-01-01 --end 2024-02-01 -f` },
+      ],
+      keyTakeaways: [
+        '`argparse` is standard but clunky. `Click` and `Typer` make extremely professional CLIs with colorized text and automatic `--help`.',
+        'A unified CLI repository (`mycompany-data-cli`) is a great way to consolidate random scripts into a single organized tool installed on dev laptops.',
+        'Always include dry-run modes (`--dry-run`) in destructive CLI commands so users can verify what will be deleted or inserted before running.',
+      ],
+    },
+    crashCourse: {
+      summary: 'Convert your utility scripts into professional CLIs using `Typer` or `Click`. Expose arguments cleanly so other team members (and CI/CD pipelines) can execute your code safely.',
+      quickFacts: [
+        'Typer: Modern CLI library based on Python Type Hints.',
+        'Argument: Mandatory input (e.g., table name).',
+        'Option: Optional flags, usually boolean or with defaults (e.g., `--dry-run`).',
+      ],
+      tips: [
+        'Use Type Hints natively in Typer. If you hint `date: datetime`, Typer automatically parses "2024-01-01" strings into python Datetime objects for you!',
+      ],
+    },
+  },
 };
