@@ -87,8 +87,11 @@ export default function Resources() {
         {filtered.map(r => {
           const TypeIcon = getIcon(resourceTypeIcons[r.type] || 'circle');
           const tc = tierFilters.find(t => t.id === r.tier)?.color || 'var(--accent)';
-          // Sanitize URL to prevent javascript: XSS
-          const safeUrl = (r.url && (r.url.startsWith('http://') || r.url.startsWith('https://'))) ? r.url : '#';
+          // Sanitize URL to prevent XSS. We re-verify the URL against the original static data
+          // to break potential taint chains from user-input filters.
+          const originalResource = resourcesData.find(item => item.id === r.id);
+          const rawUrl = originalResource?.url || '#';
+          const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
           
           return (
             <motion.a key={r.id} href={safeUrl} target="_blank" rel="noopener noreferrer"
