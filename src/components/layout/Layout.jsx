@@ -4,12 +4,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Command } from 'lucide-react';
 import CommandPalette from '../ui/CommandPalette';
 import ThemeToggle from '../ui/ThemeToggle';
+import StudyTimer from '../ui/StudyTimer';
 import { useKeyboardShortcut } from '../../hooks/useKeyboardShortcut';
 
 const navItems = [
   { path: '/', label: 'Home' },
+  { path: '/today', label: 'Today' },
   { path: '/roadmap', label: 'Roadmap' },
   { path: '/dashboard', label: 'Dashboard' },
+  { path: '/log', label: 'Log' },
   { path: '/resources', label: 'Resources' },
   { path: '/interview', label: 'Interview' },
 ];
@@ -105,6 +108,7 @@ export default function Layout() {
       </nav>
 
       <CommandPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <StudyTimer />
     </div>
   );
 }

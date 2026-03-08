@@ -43,6 +43,33 @@ export function useProgress() {
       .slice(-5)
       .reverse();
 
+    // ── Daily Tracker Computed Values ──
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLogs = state.studyLogs?.[todayStr] || [];
+    const todayMinutes = todayLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
+    const todayTopics = new Set(todayLogs.map(l => l.topicKey)).size;
+
+    // Weekly minutes
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+    let weeklyMinutes = 0;
+    if (state.studyLogs) {
+      Object.entries(state.studyLogs).forEach(([date, logs]) => {
+        if (date >= weekStartStr) {
+          logs.forEach(l => { weeklyMinutes += l.duration || 0; });
+        }
+      });
+    }
+
+    // Confidence stats
+    const confValues = Object.values(state.confidence || {}).filter(v => v > 0);
+    const avgConfidence = confValues.length > 0
+      ? Math.round((confValues.reduce((a, b) => a + b, 0) / confValues.length) * 10) / 10
+      : 0;
+    const lowConfidenceTopics = confValues.filter(v => v <= 2).length;
+
     return {
       totalSections,
       completedSections,
@@ -51,6 +78,12 @@ export function useProgress() {
       totalTopics,
       completedTopics,
       recentlyCompleted,
+      todayMinutes,
+      todayTopics,
+      weeklyMinutes,
+      avgConfidence,
+      lowConfidenceTopics,
     };
-  }, [state.progress, state.topicProgress]);
+  }, [state.progress, state.topicProgress, state.studyLogs, state.confidence]);
 }
+
