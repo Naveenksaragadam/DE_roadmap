@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { roadmapData } from '../data/roadmapData';
 import { useApp } from '../context/AppContext';
@@ -9,6 +9,8 @@ import ProgressRing from '../components/ui/ProgressRing';
 import Confetti from '../components/ui/Confetti';
 import ConfidenceRating from '../components/ui/ConfidenceRating';
 import TopicNotes from '../components/ui/TopicNotes';
+import TopicDeepDive from '../components/ui/TopicDeepDive';
+import { topicContentData } from '../data/topicContentData';
 
 function getIcon(name) {
   const f = name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
@@ -31,6 +33,7 @@ export default function TierPage() {
     return {};
   });
   const [showConfetti, setShowConfetti] = useState(false);
+  const [expandedDeepDive, setExpandedDeepDive] = useState(null);
 
   const progress = useMemo(() => {
     if (!tier) return { completed: 0, total: 0, percent: 0 };
@@ -171,6 +174,15 @@ export default function TierPage() {
                                 </span>
                               )}
                               <ConfidenceRating topicKey={tKey} size={12} />
+                              {topicContentData[`${sec.id}-${idx}`] && (
+                                <button
+                                  onClick={() => setExpandedDeepDive(expandedDeepDive === tKey ? null : tKey)}
+                                  className="p-1 rounded-md border-0 bg-transparent cursor-pointer transition-all hover:scale-110"
+                                  title="Open study material"
+                                  style={{ color: expandedDeepDive === tKey ? `var(--tier-${tierIndex + 1})` : 'var(--accent-text)' }}>
+                                  <Icons.BookOpen size={13} />
+                                </button>
+                              )}
                               <button
                                 onClick={() => startTimer(tKey, topic.substring(0, 60))}
                                 className="p-1 rounded-md border-0 bg-transparent cursor-pointer transition-all hover:scale-110"
@@ -180,6 +192,17 @@ export default function TierPage() {
                               </button>
                             </div>
                           </div>
+                          {/* Deep Dive Panel */}
+                          <AnimatePresence>
+                            {expandedDeepDive === tKey && topicContentData[`${sec.id}-${idx}`] && (
+                              <div className="px-3">
+                                <TopicDeepDive
+                                  content={topicContentData[`${sec.id}-${idx}`]}
+                                  tierColor={`var(--tier-${tierIndex + 1})`}
+                                />
+                              </div>
+                            )}
+                          </AnimatePresence>
                           {/* Inline Notes */}
                           <div className="px-3 pb-2">
                             <TopicNotes topicKey={tKey} />

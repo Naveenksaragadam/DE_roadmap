@@ -1,0 +1,1196 @@
+# PySpark FAANG Interview Reference Guide
+
+## Table of Contents
+1. [Fundamentals](#fundamentals)
+2. [Core API Mastery](#core-api-mastery)
+3. [Performance Optimization](#performance-optimization)
+4. [Advanced Processing](#advanced-processing)
+5. [MLlib & Productionization](#mllib--productionization)
+6. [Interview Question Patterns](#interview-question-patterns)
+7. [Configuration Cheat Sheet](#configuration-cheat-sheet)
+
+---
+
+## Fundamentals
+
+### Spark Architecture
+```
+Driver Program
+├── SparkContext
+├── DAG Scheduler → TaskScheduler
+└── Cluster Manager
+    ├── Executor 1 (Worker Node)
+    │   ├── Task 1 → Cache/Storage
+    │   └── Task 2
+    └── Executor 2 (Worker Node)
+        ├── Task 3
+        └── Task 4
+```
+
+**Key Points:**
+- Driver: Single point of failure, holds SparkContext
+- Executors: JVM processes, execute tasks in parallel
+- DAG: Directed Acyclic Graph of RDD transformations
+- Stages: Bounded by shuffle operations (wide transformations)
+
+### RDD Lineage vs DataFrame Execution Plan
+```python
+# RDD Lineage (physical execution path)
+rdd = sc.textFile("data.txt")
+words = rdd.flatMap(lambda line: line.split())
+word_counts = words.map(lambda word: (word, 1)).reduceByKey(lambda a, b: a + b)
+print(word_counts.toDebugString())  # Shows lineage graph
+
+# DataFrame Execution Plan (logical + physical)
+df = spark.read.text("data.txt")
+word_counts = df.select(explode(split(col("value"), " ")).alias("word")) \
+                .groupBy("word").count()
+word_counts.explain(extended=True)  # Shows all plans
+```
+
+### Lazy Evaluation Deep Dive
+**Transformations** (lazy):
+- `map`, `filter`, `flatMap`, `union`, `join`, `groupBy`
+- Build execution plan, no computation
+
+**Actions** (eager):
+- `collect`, `count`, `take`, `save`, `foreach`
+- Trigger job execution
+
+```python
+# Logical Plan → Optimized Logical Plan → Physical Plan → Code Generation
+df.explain("extended")  # Shows all optimization phases
+```
+
+### SparkSession Initialization
+```python
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .appName("FAANG_Interview_App") \
+    .config("spark.sql.adaptive.enabled", "true") \
+    .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
+    .config("spark.sql.adaptive.skewJoin.enabled", "true") \
+    .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
+    .config("spark.executor.memory", "8g") \
+    .config("spark.executor.cores", "4") \
+    .config("spark.sql.shuffle.partitions", "200") \
+    .config("spark.default.parallelism", "100") \
+    .getOrCreate()
+```
+
+---
+
+## Core API Mastery
+
+### RDDs - Advanced Operations
+
+#### Transformations
+```python
+# mapPartitions - Process entire partitions
+def process_partition(iterator):
+    # Expensive setup once per partition
+    model = load_ml_model()
+    for record in iterator:
+        yield model.predict(record)
+
+rdd.mapPartitions(process_partition)
+
+# treeReduce - Hierarchical reduction (O(log n) depth)
+rdd.treeReduce(lambda x, y: x + y, depth=3)
+
+# Custom partitioner
+class CustomPartitioner:
+    def __init__(self, num_partitions):
+        self.num_partitions = num_partitions
+    
+    def getPartition(self, key):
+        return hash(key) % self.num_partitions
+
+rdd.partitionBy(CustomPartitioner(10))
+```
+
+#### Actions
+```python
+# fold - With zero value
+rdd.fold(0, lambda acc, x: acc + x)
+
+# aggregate - Different types for accumulator and combiner
+rdd.aggregate(
+    (0, 0),  # Zero value: (sum, count)
+    lambda acc, x: (acc[0] + x, acc[1] + 1),  # Seq op
+    lambda acc1, acc2: (acc1[0] + acc2[0], acc1[1] + acc2[1])  # Comb op
+)
+```
+
+#### Partitioning Strategies
+```python
+# Range partitioning (for sorted data)
+rdd.partitionBy(RangePartitioner(numPartitions=10, rdd))
+
+# Hash partitioning (default)
+rdd.partitionBy(HashPartitioner(numPartitions=10))
+
+# Custom partitioning for skewed data
+class SkewPartitioner:
+    def getPartition(self, key):
+        if key in high_frequency_keys:
+            return hash(key) % (num_partitions // 2)
+        return (num_partitions // 2) + (hash(key) % (num_partitions // 2))
+```
+
+### DataFrames - Advanced DSL
+
+#### Complex Expressions
+```python
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+# expr() for complex SQL expressions
+df.select(expr("CASE WHEN age > 21 THEN 'adult' ELSE 'minor' END as category"))
+
+# selectExpr() for SQL-like column expressions
+df.selectExpr(
+    "name",
+    "age * 2 as double_age",
+    "substr(name, 1, 1) as first_initial"
+)
+
+# Complex type handling
+schema = StructType([
+    StructField("user", StructType([
+        StructField("id", IntegerType()),
+        StructField("profile", MapType(StringType(), StringType()))
+    ])),
+    StructField("events", ArrayType(StructType([
+        StructField("timestamp", TimestampType()),
+        StructField("action", StringType())
+    ])))
+])
+
+# Accessing nested data
+df.select(
+    col("user.id").alias("user_id"),
+    col("user.profile")["email"].alias("email"),
+    explode(col("events")).alias("event")
+).select(
+    "user_id", "email",
+    col("event.timestamp"), col("event.action")
+)
+```
+
+#### Window Functions
+```python
+from pyspark.sql.window import Window
+
+# Ranking functions
+window = Window.partitionBy("department").orderBy(desc("salary"))
+df.withColumn("rank", row_number().over(window)) \
+  .withColumn("dense_rank", dense_rank().over(window)) \
+  .withColumn("percent_rank", percent_rank().over(window))
+
+# Analytical functions
+window = Window.partitionBy("department").orderBy("date") \
+               .rowsBetween(Window.unboundedPreceding, Window.currentRow)
+df.withColumn("running_sum", sum("amount").over(window)) \
+  .withColumn("running_avg", avg("amount").over(window))
+
+# Lead/Lag
+window = Window.partitionBy("user_id").orderBy("timestamp")
+df.withColumn("next_action", lead("action", 1).over(window)) \
+  .withColumn("prev_action", lag("action", 1).over(window))
+```
+
+### Catalyst Optimizer
+
+#### Plan Visualization
+```python
+# Show all optimization phases
+df.explain("extended")
+
+# Explain modes
+df.explain("simple")    # Physical plan only
+df.explain("extended")  # Logical, optimized logical, and physical plans
+df.explain("codegen")   # Java code generation
+df.explain("cost")      # Cost-based optimization stats
+df.explain("formatted") # Formatted physical plan
+```
+
+#### UDF Performance Pitfalls
+```python
+# ❌ Python UDF (slow - serialization overhead)
+from pyspark.sql.functions import udf
+@udf(returnType=StringType())
+def slow_udf(s):
+    return s.upper()
+
+# ✅ Built-in function (vectorized)
+df.select(upper(col("name")))
+
+# ✅ SQL expression (compiled)
+df.select(expr("upper(name)"))
+
+# ✅ Pandas UDF (vectorized Python)
+from pyspark.sql.functions import pandas_udf
+import pandas as pd
+
+@pandas_udf(returnType=StringType())
+def vectorized_upper(s: pd.Series) -> pd.Series:
+    return s.str.upper()
+```
+
+---
+
+## Performance Optimization
+
+### Join Strategies
+
+#### Broadcast Hash Join
+```python
+# Automatic broadcast (< spark.sql.autoBroadcastJoinThreshold = 10MB)
+small_df.join(large_df, "key")  # Spark decides
+
+# Explicit broadcast
+from pyspark.sql.functions import broadcast
+large_df.join(broadcast(small_df), "key")
+
+# Configuration
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "100MB")
+```
+
+#### Sort Merge Join
+```python
+# Default for large tables
+# Both sides sorted and partitioned by join key
+df1.join(df2, "key")  # Uses SMJ if both sides are large
+
+# Optimize by pre-sorting
+df1_sorted = df1.sortWithinPartitions("key")
+df2_sorted = df2.sortWithinPartitions("key")
+result = df1_sorted.join(df2_sorted, "key")
+```
+
+#### Bucket Join
+```python
+# Pre-partition and sort data during write
+df1.write \
+   .bucketBy(10, "key") \
+   .sortBy("key") \
+   .saveAsTable("bucketed_table1")
+
+df2.write \
+   .bucketBy(10, "key") \
+   .sortBy("key") \
+   .saveAsTable("bucketed_table2")
+
+# Join without shuffle
+bucketed_df1 = spark.table("bucketed_table1")
+bucketed_df2 = spark.table("bucketed_table2")
+result = bucketed_df1.join(bucketed_df2, "key")  # No shuffle!
+```
+
+### Data Skew Solutions
+
+#### Salting Technique
+```python
+import random
+from pyspark.sql.functions import rand, lit, array, explode
+
+# Detect skew
+key_counts = df.groupBy("key").count()
+skewed_keys = key_counts.filter(col("count") > threshold).select("key")
+
+# Salt skewed keys
+SALT_BUCKETS = 100
+
+def add_salt(df, join_keys, salt_buckets):
+    return df.withColumn("salt", (rand() * salt_buckets).cast("int")) \
+             .withColumn("salted_key", concat_ws("_", col("key"), col("salt")))
+
+# For dimension table, duplicate with all salt values
+def replicate_with_salt(df, salt_buckets):
+    salts = [lit(i) for i in range(salt_buckets)]
+    return df.withColumn("salt", explode(array(*salts))) \
+             .withColumn("salted_key", concat_ws("_", col("key"), col("salt")))
+
+# Apply salting
+salted_fact = add_salt(fact_df, ["key"], SALT_BUCKETS)
+replicated_dim = replicate_with_salt(dim_df, SALT_BUCKETS)
+result = salted_fact.join(replicated_dim, "salted_key")
+```
+
+#### Isolated Broadcast Map
+```python
+# Handle mixed skew scenario
+def skew_join(large_df, small_df, join_key, skew_threshold=1000):
+    # Identify skewed keys
+    key_counts = large_df.groupBy(join_key).count()
+    skewed_keys = key_counts.filter(col("count") > skew_threshold) \
+                           .select(join_key).rdd.map(lambda x: x[0]).collect()
+    
+    # Split large DataFrame
+    skewed_large = large_df.filter(col(join_key).isin(skewed_keys))
+    normal_large = large_df.filter(~col(join_key).isin(skewed_keys))
+    
+    # Split small DataFrame
+    skewed_small = small_df.filter(col(join_key).isin(skewed_keys))
+    normal_small = small_df.filter(~col(join_key).isin(skewed_keys))
+    
+    # Normal join with broadcast
+    normal_result = normal_large.join(broadcast(normal_small), join_key)
+    
+    # Skewed join with salting
+    salted_result = add_salt(skewed_large, [join_key], 100) \
+                   .join(replicate_with_salt(skewed_small, 100), "salted_key")
+    
+    return normal_result.unionByName(salted_result.drop("salt", "salted_key"))
+```
+
+### Storage Levels & Caching
+```python
+from pyspark import StorageLevel
+
+# Memory-only (fastest, risky for large datasets)
+df.persist(StorageLevel.MEMORY_ONLY)
+
+# Memory + Disk (recommended for most cases)
+df.persist(StorageLevel.MEMORY_AND_DISK)
+
+# Serialized (save memory, CPU overhead)
+df.persist(StorageLevel.MEMORY_AND_DISK_SER)
+
+# Off-heap (Tungsten, no GC pressure)
+df.persist(StorageLevel.OFF_HEAP)
+
+# Replication (fault tolerance)
+df.persist(StorageLevel.MEMORY_AND_DISK_2)
+
+# Check cache status
+spark.catalog.cacheTable("table_name")
+spark.catalog.isCached("table_name")
+spark.catalog.uncacheTable("table_name")
+```
+
+### Tungsten Optimization
+
+#### Whole-Stage Code Generation
+```python
+# Check if code generation is enabled
+spark.conf.get("spark.sql.codegen.wholeStage")  # Should be 'true'
+
+# Disable for debugging
+spark.conf.set("spark.sql.codegen.wholeStage", "false")
+
+# View generated code
+df.explain("codegen")
+```
+
+#### Memory Management Formulas
+```python
+# Executor memory allocation
+total_executor_memory = executor_memory_gb * 1024  # MB
+executor_memory_fraction = 0.6  # Default spark.executor.memory.fraction
+storage_fraction = 0.5  # spark.executor.memory.storageFraction
+
+execution_memory = total_executor_memory * executor_memory_fraction * (1 - storage_fraction)
+storage_memory = total_executor_memory * executor_memory_fraction * storage_fraction
+user_memory = total_executor_memory * (1 - executor_memory_fraction)
+
+# Optimal partition size calculation
+target_partition_size_mb = 128  # Sweet spot
+num_partitions = total_data_size_mb / target_partition_size_mb
+
+# Shuffle partition sizing
+total_cores = num_executors * executor_cores
+optimal_shuffle_partitions = total_cores * 2  # 2-3x cores
+```
+
+### Cost-Based Optimization (CBO)
+```python
+# Enable CBO
+spark.conf.set("spark.sql.cbo.enabled", "true")
+spark.conf.set("spark.sql.cbo.joinReorder.enabled", "true")
+spark.conf.set("spark.sql.cbo.planStats.enabled", "true")
+
+# Collect table statistics
+spark.sql("ANALYZE TABLE my_table COMPUTE STATISTICS")
+spark.sql("ANALYZE TABLE my_table COMPUTE STATISTICS FOR COLUMNS col1, col2")
+
+# Check statistics
+spark.sql("DESCRIBE EXTENDED my_table").show()
+```
+
+### Garbage Collection Tuning
+```python
+# G1GC configuration (recommended for Spark)
+gc_configs = {
+    "spark.executor.extraJavaOptions": 
+        "-XX:+UseG1GC "
+        "-XX:MaxGCPauseMillis=200 "
+        "-XX:G1HeapRegionSize=16m "
+        "-XX:+G1PrintRegionRememberedSetInfo "
+        "-XX:+PrintGC "
+        "-XX:+PrintGCDetails "
+        "-XX:+PrintGCTimeStamps"
+}
+
+# Apply configuration
+for key, value in gc_configs.items():
+    spark.conf.set(key, value)
+```
+
+---
+
+## Advanced Processing
+
+### Structured Streaming
+
+#### Basic Stream Processing
+```python
+from pyspark.sql.streaming import *
+
+# Read from Kafka
+kafka_df = spark \
+    .readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("subscribe", "events") \
+    .option("startingOffsets", "latest") \
+    .load()
+
+# Parse JSON data
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, TimestampType
+
+schema = StructType([
+    StructField("user_id", StringType()),
+    StructField("event_time", TimestampType()),
+    StructField("event_type", StringType())
+])
+
+events_df = kafka_df.select(
+    from_json(col("value").cast("string"), schema).alias("data")
+).select("data.*")
+```
+
+#### Event-time vs Processing-time
+```python
+# Event-time windowing
+windowed_counts = events_df \
+    .withWatermark("event_time", "10 minutes") \
+    .groupBy(
+        window(col("event_time"), "5 minutes", "1 minute"),  # 5-min window, 1-min slide
+        col("event_type")
+    ).count()
+
+# Processing-time trigger
+query = windowed_counts.writeStream \
+    .outputMode("update") \
+    .trigger(processingTime="30 seconds") \
+    .format("console") \
+    .start()
+
+# Event-time trigger (once watermark passes)
+query = windowed_counts.writeStream \
+    .outputMode("append") \
+    .trigger(once=True) \
+    .format("console") \
+    .start()
+```
+
+#### Watermarking Strategy
+```python
+# Late data handling
+events_with_watermark = events_df \
+    .withWatermark("event_time", "1 hour")  # Allow 1 hour late data
+
+# Watermark formula: max_event_time - watermark_delay
+# Events older than this are dropped
+
+# Monitor watermark
+def monitor_watermark(batch_df, batch_id):
+    watermark = batch_df.sparkSession.streams.get(query.id).lastProgress.get("eventTime", {}).get("watermark")
+    print(f"Batch {batch_id}: Watermark = {watermark}")
+    
+query = events_df.writeStream \
+    .foreachBatch(monitor_watermark) \
+    .start()
+```
+
+#### Stateful Operations
+```python
+from pyspark.sql.streaming.state import GroupState, GroupStateTimeout
+
+# mapGroupsWithState for custom stateful processing
+def update_user_session(key, values, state: GroupState):
+    if state.hasTimedOut:
+        # Handle timeout
+        final_session = state.get()
+        state.remove()
+        return final_session
+    
+    # Update state with new events
+    if state.exists:
+        current_session = state.get()
+    else:
+        current_session = {"user_id": key[0], "events": [], "start_time": None}
+    
+    for event in values:
+        current_session["events"].append(event)
+        if not current_session["start_time"]:
+            current_session["start_time"] = event.timestamp
+    
+    # Set timeout (30 minutes of inactivity)
+    state.setTimeoutDuration("30 minutes")
+    state.update(current_session)
+    
+    return current_session
+
+# Apply stateful transformation
+user_sessions = events_df \
+    .groupBy("user_id") \
+    .mapGroupsWithState(
+        outputMode=OutputMode.Update(),
+        timeoutConf=GroupStateTimeout.ProcessingTimeTimeout
+    )(update_user_session)
+```
+
+### Delta Lake Fundamentals
+
+#### ACID Transactions
+```python
+from delta.tables import DeltaTable
+
+# Create Delta table
+df.write.format("delta").save("/path/to/delta-table")
+
+# Load Delta table
+delta_df = spark.read.format("delta").load("/path/to/delta-table")
+
+# Upsert (merge) operation
+deltaTable = DeltaTable.forPath(spark, "/path/to/delta-table")
+
+deltaTable.alias("target").merge(
+    updates_df.alias("source"),
+    "target.id = source.id"
+).whenMatchedUpdate(set={
+    "name": "source.name",
+    "updated_at": "current_timestamp()"
+}).whenNotMatchedInsert(values={
+    "id": "source.id",
+    "name": "source.name",
+    "created_at": "current_timestamp()"
+}).execute()
+```
+
+#### Time Travel
+```python
+# Read historical versions
+df_v0 = spark.read.format("delta").option("versionAsOf", 0).load("/path/to/delta-table")
+df_yesterday = spark.read.format("delta").option("timestampAsOf", "2023-01-01").load("/path/to/delta-table")
+
+# Show table history
+deltaTable.history().show()
+
+# Vacuum old files (7 days retention)
+deltaTable.vacuum(retentionHours=168)
+```
+
+### GraphX Fundamentals
+
+#### Pregel API
+```python
+from pyspark.graphx import Graph
+
+# Create graph from edges
+edges_rdd = sc.parallelize([
+    (1, 2, {"weight": 1.0}),
+    (2, 3, {"weight": 2.0}),
+    (1, 3, {"weight": 3.0})
+])
+
+vertices_rdd = sc.parallelize([
+    (1, {"name": "Alice"}),
+    (2, {"name": "Bob"}),
+    (3, {"name": "Charlie"})
+])
+
+graph = Graph(vertices_rdd, edges_rdd)
+
+# PageRank
+pagerank_graph = graph.pageRank(resetProb=0.15, tol=0.01)
+
+# Connected components
+cc_graph = graph.connectedComponents()
+```
+
+---
+
+## MLlib & Productionization
+
+### Feature Engineering Pipelines
+```python
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import VectorAssembler, StandardScaler, StringIndexer, OneHotEncoder
+from pyspark.ml.classification import LogisticRegression
+
+# Feature engineering pipeline
+string_indexer = StringIndexer(inputCol="category", outputCol="category_index")
+one_hot_encoder = OneHotEncoder(inputCol="category_index", outputCol="category_vec")
+assembler = VectorAssembler(
+    inputCols=["numeric_feature1", "numeric_feature2", "category_vec"],
+    outputCol="features"
+)
+scaler = StandardScaler(inputCol="features", outputCol="scaled_features")
+
+# ML pipeline
+lr = LogisticRegression(featuresCol="scaled_features", labelCol="label")
+
+pipeline = Pipeline(stages=[
+    string_indexer,
+    one_hot_encoder,
+    assembler,
+    scaler,
+    lr
+])
+
+# Fit pipeline
+model = pipeline.fit(train_df)
+predictions = model.transform(test_df)
+```
+
+### Distributed Model Training
+```python
+from pyspark.ml.classification import RandomForestClassifier
+from pyspark.ml.evaluation import BinaryClassificationEvaluator
+from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+
+# Stratified sampling for imbalanced datasets
+def stratified_split(df, label_col, train_ratio=0.8, seed=42):
+    fractions = df.select(label_col).distinct().rdd.map(lambda x: (x[0], train_ratio)).collectAsMap()
+    train_df = df.sampleBy(label_col, fractions, seed)
+    test_df = df.subtract(train_df)
+    return train_df, test_df
+
+train_df, test_df = stratified_split(df, "label")
+
+# Hyperparameter tuning
+rf = RandomForestClassifier(featuresCol="features", labelCol="label")
+paramGrid = ParamGridBuilder() \
+    .addGrid(rf.numTrees, [10, 50, 100]) \
+    .addGrid(rf.maxDepth, [5, 10, 15]) \
+    .build()
+
+evaluator = BinaryClassificationEvaluator()
+crossval = CrossValidator(
+    estimator=rf,
+    estimatorParamMaps=paramGrid,
+    evaluator=evaluator,
+    numFolds=5
+)
+
+cv_model = crossval.fit(train_df)
+```
+
+### Model Serialization & Production
+```python
+# Save model
+model.write().overwrite().save("/path/to/model")
+
+# Load model
+from pyspark.ml import PipelineModel
+loaded_model = PipelineModel.load("/path/to/model")
+
+# Batch scoring
+batch_predictions = loaded_model.transform(new_data_df)
+
+# Real-time scoring with structured streaming
+streaming_predictions = kafka_stream \
+    .select(from_json(col("value"), input_schema).alias("data")) \
+    .select("data.*") \
+    .transform(lambda df: loaded_model.transform(df)) \
+    .writeStream \
+    .outputMode("append") \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", "localhost:9092") \
+    .option("topic", "predictions") \
+    .start()
+```
+
+### Advanced MLlib Algorithms
+```python
+# Collaborative Filtering (ALS)
+from pyspark.ml.recommendation import ALS
+
+als = ALS(
+    maxIter=10,
+    regParam=0.1,
+    userCol="user_id",
+    itemCol="item_id",
+    ratingCol="rating",
+    coldStartStrategy="drop"
+)
+
+model = als.fit(ratings_df)
+user_recs = model.recommendForAllUsers(10)
+item_recs = model.recommendForAllItems(10)
+
+# K-Means Clustering
+from pyspark.ml.clustering import KMeans
+from pyspark.ml.evaluation import ClusteringEvaluator
+
+kmeans = KMeans(k=5, seed=42, featuresCol="scaled_features")
+km_model = kmeans.fit(df)
+predictions = km_model.transform(df)
+
+# Evaluate clustering
+evaluator = ClusteringEvaluator()
+silhouette = evaluator.evaluate(predictions)
+
+# Topic Modeling with LDA
+from pyspark.ml.clustering import LDA
+from pyspark.ml.feature import CountVectorizer
+
+# Prepare text data
+cv = CountVectorizer(inputCol="words", outputCol="features", vocabSize=1000)
+cv_model = cv.fit(documents_df)
+vectorized_docs = cv_model.transform(documents_df)
+
+# LDA model
+lda = LDA(k=10, maxIter=10, featuresCol="features")
+lda_model = lda.fit(vectorized_docs)
+topics = lda_model.describeTopics(maxTermsPerTopic=5)
+```
+
+---
+
+## Interview Question Patterns
+
+### Pattern 1: Data Processing & Aggregation
+```python
+# Common Question: "Find top N customers by revenue per month"
+def top_customers_by_month(orders_df, n=10):
+    monthly_revenue = orders_df \
+        .withColumn("year_month", date_format(col("order_date"), "yyyy-MM")) \
+        .groupBy("year_month", "customer_id") \
+        .agg(sum("order_amount").alias("monthly_revenue")) \
+        .withColumn("rank", 
+                   row_number().over(
+                       Window.partitionBy("year_month")
+                             .orderBy(desc("monthly_revenue"))
+                   )) \
+        .filter(col("rank") <= n)
+    
+    return monthly_revenue
+
+# Advanced: Handle data skew with salting
+def top_customers_skew_resistant(orders_df, n=10):
+    # Add random salt for initial aggregation
+    salted_df = orders_df \
+        .withColumn("salt", (rand() * 100).cast("int")) \
+        .withColumn("salted_customer", concat(col("customer_id"), lit("_"), col("salt")))
+    
+    # First level aggregation
+    partial_agg = salted_df \
+        .groupBy("year_month", "salted_customer", "customer_id") \
+        .agg(sum("order_amount").alias("partial_revenue"))
+    
+    # Final aggregation
+    final_agg = partial_agg \
+        .groupBy("year_month", "customer_id") \
+        .agg(sum("partial_revenue").alias("monthly_revenue"))
+    
+    return final_agg.withColumn("rank", 
+                               row_number().over(
+                                   Window.partitionBy("year_month")
+                                         .orderBy(desc("monthly_revenue"))
+                               )).filter(col("rank") <= n)
+```
+
+### Pattern 2: Complex Joins & Deduplication
+```python
+# Question: "Join user events with user profiles, handle duplicates"
+def clean_user_events_join(events_df, profiles_df):
+    # Deduplicate events (keep latest by timestamp)
+    events_clean = events_df \
+        .withColumn("rank", 
+                   row_number().over(
+                       Window.partitionBy("user_id", "event_type")
+                             .orderBy(desc("timestamp"))
+                   )) \
+        .filter(col("rank") == 1) \
+        .drop("rank")
+    
+    # Deduplicate profiles (keep latest version)
+    profiles_clean = profiles_df \
+        .withColumn("rank",
+                   row_number().over(
+                       Window.partitionBy("user_id")
+                             .orderBy(desc("last_updated"))
+                   )) \
+        .filter(col("rank") == 1) \
+        .drop("rank")
+    
+    # Efficient join strategy
+    if profiles_clean.count() < 10000:  # Broadcast small table
+        result = events_clean.join(broadcast(profiles_clean), "user_id", "left")
+    else:  # Sort-merge join
+        result = events_clean.sortWithinPartitions("user_id") \
+                           .join(profiles_clean.sortWithinPartitions("user_id"), 
+                                 "user_id", "left")
+    
+    return result
+```
+
+### Pattern 3: Time-series Analysis
+```python
+# Question: "Calculate moving averages and detect anomalies"
+def time_series_analysis(metrics_df, window_days=7, anomaly_threshold=2.0):
+    # Calculate moving statistics
+    window = Window.partitionBy("metric_name") \
+                   .orderBy("date") \
+                   .rowsBetween(-(window_days-1), 0)
+    
+    stats_df = metrics_df \
+        .withColumn("moving_avg", avg("value").over(window)) \
+        .withColumn("moving_std", 
+                   sqrt(avg(pow(col("value") - avg("value").over(window), 2)).over(window))) \
+        .withColumn("z_score", 
+                   (col("value") - col("moving_avg")) / col("moving_std"))
+    
+    # Detect anomalies
+    anomalies = stats_df \
+        .withColumn("is_anomaly", abs(col("z_score")) > anomaly_threshold) \
+        .withColumn("anomaly_type",
+                   when(col("z_score") > anomaly_threshold, "high")
+                   .when(col("z_score") < -anomaly_threshold, "low")
+                   .otherwise("normal"))
+    
+    return anomalies
+```
+
+### Pattern 4: Graph Processing
+```python
+# Question: "Find shortest paths in a network"
+def shortest_paths_bfs(edges_df, source_id, max_iterations=10):
+    # Initialize distances
+    vertices_df = edges_df.select("src").distinct().withColumnRenamed("src", "id") \
+                         .union(edges_df.select("dst").distinct().withColumnRenamed("dst", "id")) \
+                         .distinct() \
+                         .withColumn("distance", 
+                                   when(col("id") == source_id, 0).otherwise(float('inf')))
+    
+    # Iterative BFS
+    for i in range(max_iterations):
+        # Join vertices with edges
+        updated = vertices_df.alias("v").join(edges_df.alias("e"), col("v.id") == col("e.src")) \
+                            .withColumn("new_distance", col("v.distance") + col("e.weight")) \
+                            .select(col("e.dst").alias("id"), "new_distance")
+        
+        # Update distances
+        old_vertices = vertices_df.join(updated, "id", "left_anti")
+        new_distances = vertices_df.join(updated, "id") \
+                                 .withColumn("distance", 
+                                           least(col("distance"), col("new_distance"))) \
+                                 .select("id", "distance")
+        
+        vertices_df = old_vertices.union(new_distances)
+        
+        # Check for convergence
+        if updated.count() == 0:
+            break
+    
+    return vertices_df.filter(col("distance") != float('inf'))
+```
+
+### Pattern 5: Real-time Stream Processing
+```python
+# Question: "Implement session-based aggregations"
+def session_aggregation(events_stream, session_timeout_minutes=30):
+    # Define state schema
+    from pyspark.sql.types import MapType
+    import time
+    
+    def update_session_state(key, values, state):
+        session_timeout = session_timeout_minutes * 60 * 1000  # milliseconds
+        current_time = int(time.time() * 1000)
+        
+        if state.hasTimedOut:
+            # Session expired, emit final result
+            if state.exists:
+                final_session = state.get()
+                state.remove()
+                return [final_session]
+            return []
+        
+        # Process new events
+        session_data = state.get() if state.exists else {
+            "user_id": key,
+            "events": [],
+            "session_start": None,
+            "last_activity": None
+        }
+        
+        for event in values:
+            event_time = int(event.timestamp.timestamp() * 1000)
+            
+            # Check if new session needed
+            if (session_data["last_activity"] and 
+                event_time - session_data["last_activity"] > session_timeout):
+                # Emit previous session and start new one
+                old_session = session_data.copy()
+                state.remove()
+                
+                # Start new session
+                session_data = {
+                    "user_id": key,
+                    "events": [event],
+                    "session_start": event_time,
+                    "last_activity": event_time
+                }
+                state.update(session_data)
+                state.setTimeoutDuration(f"{session_timeout_minutes} minutes")
+                
+                return [old_session]
+            else:
+                # Continue current session
+                session_data["events"].append(event)
+                if not session_data["session_start"]:
+                    session_data["session_start"] = event_time
+                session_data["last_activity"] = event_time
+        
+        state.update(session_data)
+        state.setTimeoutDuration(f"{session_timeout_minutes} minutes")
+        return []
+    
+    # Apply session aggregation
+    sessions = events_stream \
+        .groupBy("user_id") \
+        .mapGroupsWithState(
+            outputMode=OutputMode.Append(),
+            timeoutConf=GroupStateTimeout.ProcessingTimeTimeout
+        )(update_session_state)
+    
+    return sessions
+```
+
+---
+
+## Configuration Cheat Sheet
+
+### Core Configuration Tuning
+```python
+# Memory Configuration
+configs = {
+    # Driver settings
+    "spark.driver.memory": "4g",
+    "spark.driver.maxResultSize": "2g",
+    
+    # Executor settings
+    "spark.executor.memory": "8g",
+    "spark.executor.cores": "5",  # Leave 1 core for OS
+    "spark.executor.instances": "20",
+    
+    # Memory fractions
+    "spark.executor.memory.fraction": "0.8",      # 80% for execution + storage
+    "spark.executor.memory.storageFraction": "0.5", # 50% of above for caching
+    
+    # Parallelism
+    "spark.default.parallelism": "100",  # 2-3x total cores
+    "spark.sql.shuffle.partitions": "200",  # 2-3x total cores
+    
+    # Adaptive Query Execution
+    "spark.sql.adaptive.enabled": "true",
+    "spark.sql.adaptive.coalescePartitions.enabled": "true",
+    "spark.sql.adaptive.coalescePartitions.minPartitionNum": "1",
+    "spark.sql.adaptive.coalescePartitions.initialPartitionNum": "200",
+    "spark.sql.adaptive.advisoryPartitionSizeInBytes": "128MB",
+    "spark.sql.adaptive.skewJoin.enabled": "true",
+    "spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes": "256MB",
+    
+    # Broadcast
+    "spark.sql.autoBroadcastJoinThreshold": "100MB",
+    
+    # Serialization
+    "spark.serializer": "org.apache.spark.serializer.KryoSerializer",
+    "spark.sql.execution.arrow.pyspark.enabled": "true",
+    
+    # Shuffle optimization
+    "spark.sql.shuffle.service.enabled": "true",
+    "spark.shuffle.compress": "true",
+    "spark.shuffle.spill.compress": "true",
+    
+    # Garbage collection
+    "spark.executor.extraJavaOptions": 
+        "-XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:G1HeapRegionSize=16m"
+}
+
+# Apply configurations
+for key, value in configs.items():
+    spark.conf.set(key, value)
+```
+
+### Dynamic Resource Allocation
+```python
+dynamic_configs = {
+    "spark.dynamicAllocation.enabled": "true",
+    "spark.dynamicAllocation.minExecutors": "5",
+    "spark.dynamicAllocation.maxExecutors": "100",
+    "spark.dynamicAllocation.initialExecutors": "20",
+    "spark.dynamicAllocation.executorIdleTimeout": "60s",
+    "spark.dynamicAllocation.schedulerBacklogTimeout": "1s",
+}
+```
+
+### Monitoring & Debugging
+```python
+# Enable detailed logging
+monitoring_configs = {
+    "spark.sql.execution.arrow.maxRecordsPerBatch": "10000",
+    "spark.sql.streaming.metricsEnabled": "true",
+    "spark.sql.streaming.numRecentProgressUpdates": "100",
+    "spark.eventLog.enabled": "true",
+    "spark.eventLog.dir": "/path/to/eventlogs",
+    "spark.history.fs.logDirectory": "/path/to/eventlogs",
+}
+
+# Performance monitoring functions
+def monitor_partition_sizes(df, sample_fraction=0.1):
+    """Monitor partition size distribution"""
+    partition_sizes = df.sample(sample_fraction) \
+                       .mapPartitions(lambda iterator: [sum(1 for _ in iterator)]) \
+                       .collect()
+    
+    import numpy as np
+    print(f"Partition count: {len(partition_sizes)}")
+    print(f"Min size: {min(partition_sizes)}")
+    print(f"Max size: {max(partition_sizes)}")
+    print(f"Mean size: {np.mean(partition_sizes):.2f}")
+    print(f"Std size: {np.std(partition_sizes):.2f}")
+    
+    return partition_sizes
+
+def explain_performance(df, operation_name=""):
+    """Comprehensive performance analysis"""
+    print(f"\n=== Performance Analysis: {operation_name} ===")
+    
+    # Physical plan
+    print("\n--- Physical Plan ---")
+    df.explain("formatted")
+    
+    # Partition analysis
+    print(f"\n--- Partition Info ---")
+    print(f"Number of partitions: {df.rdd.getNumPartitions()}")
+    
+    # Memory usage estimation
+    estimated_size_bytes = df.rdd.map(lambda x: len(str(x))).reduce(lambda a, b: a + b)
+    print(f"Estimated size: {estimated_size_bytes / (1024**2):.2f} MB")
+
+# Usage examples
+# monitor_partition_sizes(large_df)
+# explain_performance(processed_df, "After complex joins")
+```
+
+### Production Deployment Checklist
+```python
+production_checklist = """
+📋 SPARK PRODUCTION DEPLOYMENT CHECKLIST
+
+🔧 Configuration:
+□ Set appropriate executor memory (6-10GB per executor)
+□ Configure dynamic allocation based on workload
+□ Enable adaptive query execution
+□ Set optimal shuffle partitions (200-400 for most workloads)
+□ Configure Kryo serialization
+□ Enable G1GC with appropriate settings
+
+⚡ Performance:
+□ Identify and cache frequently accessed datasets
+□ Use appropriate storage levels (MEMORY_AND_DISK recommended)
+□ Implement bucketing for frequently joined tables
+□ Use broadcast hints for small dimension tables
+□ Address data skew with salting techniques
+□ Monitor partition sizes (target 100-200MB per partition)
+
+🛡️ Reliability:
+□ Handle schema evolution gracefully
+□ Implement proper error handling and retries
+□ Set appropriate timeouts
+□ Configure checkpointing for streaming jobs
+□ Enable speculation for long-running tasks
+□ Monitor resource utilization and adjust accordingly
+
+📊 Monitoring:
+□ Set up Spark History Server
+□ Configure application and driver logs
+□ Monitor JVM metrics and GC performance
+□ Track job completion times and failure rates
+□ Set up alerts for resource exhaustion
+□ Monitor data quality metrics
+
+🔒 Security:
+□ Enable authentication and authorization
+□ Encrypt data in transit and at rest
+□ Secure Spark UI access
+□ Configure proper network security
+□ Audit access to sensitive datasets
+
+💾 Data Management:
+□ Implement proper data lifecycle management
+□ Use appropriate file formats (Parquet/Delta recommended)
+□ Partition data appropriately for query patterns
+□ Implement data quality checks
+□ Set up backup and recovery procedures
+"""
+
+print(production_checklist)
+```
+
+---
+
+## Quick Reference Commands
+
+### Essential DataFrame Operations
+```python
+# Schema and structure
+df.printSchema()
+df.dtypes
+df.columns
+df.count()
+df.describe().show()
+df.summary("count", "mean", "stddev", "min", "max").show()
+
+# Sampling and inspection
+df.show(20, truncate=False)
+df.take(10)
+df.first()
+df.head(5)
+df.sample(0.1, seed=42).show()
+
+# Data quality checks
+df.filter(col("column_name").isNull()).count()
+df.dropDuplicates(["key_column"]).count()
+df.groupBy().count().collect()[0][0]  # Total count
+
+# Performance analysis
+df.rdd.getNumPartitions()
+df.rdd.mapPartitions(lambda iterator: [sum(1 for _ in iterator)]).collect()
+df.explain("extended")
+df.cache().count()  # Force caching
+```
+
+### Advanced Troubleshooting Commands
+```python
+# Memory and execution monitoring
+def debug_dataframe_memory(df, df_name=""):
+    print(f"\n=== Debug Info for {df_name} ===")
+    print(f"Partitions: {df.rdd.getNumPartitions()}")
+    print(f"Is cached: {df.is_cached}")
+    print(f"Storage level: {df.storageLevel}")
+    
+    # Sample partition sizes
+    partition_counts = df.rdd.mapPartitions(lambda x: [sum(1 for _ in x)]).collect()
+    print(f"Partition size stats: min={min(partition_counts)}, max={max(partition_counts)}, avg={sum(partition_counts)/len(partition_counts):.1f}")
+
+# Query plan analysis
+def analyze_

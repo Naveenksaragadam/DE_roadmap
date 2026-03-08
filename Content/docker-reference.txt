@@ -1,0 +1,899 @@
+# Docker Notes
+
+## Table of Contents
+1. [Docker Fundamentals](#docker-fundamentals)
+2. [Essential Docker Commands](#essential-docker-commands)
+3. [Complete Docker Commands Reference](#complete-docker-commands-reference)
+4. [Docker Compose Commands Reference](#docker-compose-commands-reference)
+5. [Dockerfile Best Practices for Data Engineering](#dockerfile-best-practices)
+6. [Data Engineering Specific Patterns](#data-engineering-patterns)
+7. [Docker Compose for Data Pipelines](#docker-compose)
+8. [Volume Management and Data Persistence](#volume-management)
+9. [Networking for Data Services](#networking)
+10. [Common Data Engineering Docker Images](#common-images)
+11. [Performance Optimization](#performance-optimization)
+12. [Troubleshooting](#troubleshooting)
+
+## Docker Fundamentals
+
+### Core Concepts
+- **Image**: Read-only template used to create containers
+- **Container**: Running instance of an image
+- **Dockerfile**: Text file containing instructions to build an image
+- **Registry**: Storage and distribution system for Docker images
+- **Volume**: Persistent data storage mechanism
+- **Network**: Communication layer between containers
+
+### Container vs Virtual Machine
+- Containers share the host OS kernel (lightweight)
+- VMs include full OS (resource-heavy)
+- Containers start faster and use fewer resources
+
+## Essential Docker Commands
+
+### Image Management
+```bash
+# List images
+docker images
+docker image ls
+
+# Pull image from registry
+docker pull postgres:13
+docker pull apache/airflow:2.5.0
+
+# Build image from Dockerfile
+docker build -t my-data-app:v1.0 .
+docker build -f Dockerfile.prod -t my-app:prod .
+
+# Remove images
+docker rmi image_name
+docker image prune  # Remove unused images
+```
+
+### Container Management
+```bash
+# Run container
+docker run -d --name postgres-db postgres:13
+docker run -it --rm python:3.9 bash  # Interactive with auto-cleanup
+
+# List containers
+docker ps          # Running containers
+docker ps -a       # All containers
+
+# Stop/Start containers
+docker stop container_name
+docker start container_name
+docker restart container_name
+
+# Remove containers
+docker rm container_name
+docker container prune  # Remove stopped containers
+
+# View logs
+docker logs container_name
+docker logs -f container_name  # Follow logs
+```
+
+### Execution and Inspection
+```bash
+# Execute commands in running container
+docker exec -it container_name bash
+docker exec container_name python script.py
+
+# Inspect container details
+docker inspect container_name
+
+# View container resource usage
+docker stats
+docker stats container_name
+```
+
+## Complete Docker Commands Reference
+
+### Docker Run Command with Common Flags
+
+#### Basic Syntax
+```bash
+docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+```
+
+#### Most Common Flags and Their Explanations
+
+##### Container Naming and Management
+```bash
+# --name: Assign a custom name to the container
+docker run --name my-postgres postgres:13
+docker run --name data-pipeline-worker my-etl:latest
+
+# -d, --detach: Run container in background (detached mode)
+docker run -d --name background-job postgres:13
+
+# --rm: Automatically remove container when it exits
+docker run --rm -it python:3.9 python script.py
+
+# -it: Interactive terminal (combines -i and -t)
+# -i, --interactive: Keep STDIN open
+# -t, --tty: Allocate a pseudo-TTY
+docker run -it ubuntu:20.04 bash
+docker run -i postgres:13 psql  # Interactive only
+docker run -t postgres:13        # TTY only
+```
+
+##### Port Mapping
+```bash
+# -p, --publish: Map container port to host port
+# Format: HOST_PORT:CONTAINER_PORT
+docker run -p 5432:5432 postgres:13           # Map postgres port
+docker run -p 127.0.0.1:8080:80 nginx         # Bind to specific IP
+docker run -p 3000-3010:3000-3010 my-app      # Map port range
+
+# -P, --publish-all: Publish all exposed ports to random host ports
+docker run -P nginx
+```
+
+##### Volume Mounting
+```bash
+# -v, --volume: Mount volumes or bind mounts
+# Format: SOURCE:DESTINATION[:OPTIONS]
+docker run -v /host/data:/container/data postgres:13        # Bind mount
+docker run -v named_volume:/data postgres:13                # Named volume
+docker run -v $(pwd):/workspace python:3.9                  # Current directory
+
+# --mount: More explicit volume mounting (preferred for complex scenarios)
+docker run --mount type=bind,source=$(pwd),target=/app my-app
+docker run --mount type=volume,source=data_vol,target=/data postgres:13
+docker run --mount type=tmpfs,target=/tmp,tmpfs-size=100m my-app
+```
+
+##### Environment Variables
+```bash
+# -e, --env: Set environment variables
+docker run -e POSTGRES_PASSWORD=secret postgres:13
+docker run -e "DATABASE_URL=postgresql://user:pass@db:5432/mydb" my-app
+
+# --env-file: Load environment variables from file
+docker run --env-file .env postgres:13
+docker run --env-file production.env --env-file secrets.env my-app
+```
+
+##### Resource Limits
+```bash
+# -m, --memory: Memory limit
+docker run -m 2g postgres:13          # 2GB memory limit
+docker run -m 512m my-app             # 512MB memory limit
+
+# --cpus: CPU limit (number of CPUs)
+docker run --cpus="1.5" my-processor  # Use 1.5 CPUs max
+docker run --cpus="0.5" light-task    # Use 0.5 CPU max
+
+# --memory-swap: Total memory + swap limit
+docker run -m 1g --memory-swap 2g postgres:13
+```
+
+##### Networking
+```bash
+# --network: Connect to specific network
+docker run --network my_network postgres:13
+docker run --network host my-app              # Use host networking
+docker run --network none isolated-app       # No networking
+
+# --link: Link to another container (deprecated, use networks instead)
+docker run --link postgres:db my-app
+
+# --add-host: Add custom host-to-IP mapping
+docker run --add-host mydb:192.168.1.100 my-app
+```
+
+##### Working Directory and User
+```bash
+# -w, --workdir: Set working directory
+docker run -w /app python:3.9 python script.py
+
+# -u, --user: Set user ID or name
+docker run -u 1000:1000 postgres:13           # Use specific UID:GID
+docker run -u dataeng postgres:13             # Use username
+docker run -u $(id -u):$(id -g) my-app        # Use current user's ID
+```
+
+##### Advanced Options
+```bash
+# --restart: Restart policy
+docker run --restart always postgres:13        # Always restart
+docker run --restart unless-stopped my-app     # Restart unless manually stopped
+docker run --restart on-failure:3 flaky-app   # Restart on failure, max 3 times
+
+# --health-cmd: Health check command
+docker run --health-cmd="pg_isready -U postgres" postgres:13
+
+# --security-opt: Security options
+docker run --security-opt no-new-privileges my-app
+
+# --cap-add, --cap-drop: Add or drop Linux capabilities
+docker run --cap-add SYS_TIME time-sync-app
+docker run --cap-drop ALL --cap-add NET_ADMIN network-app
+```
+
+### Docker Build Command with Flags
+
+```bash
+# Basic build
+docker build -t my-app:latest .
+
+# -t, --tag: Tag the image
+docker build -t my-app:v1.0 -t my-app:latest .    # Multiple tags
+
+# -f, --file: Specify Dockerfile path
+docker build -f Dockerfile.prod -t my-app:prod .
+docker build -f docker/Dockerfile.dev -t my-app:dev .
+
+# --build-arg: Pass build-time variables
+docker build --build-arg VERSION=1.0 --build-arg ENV=production -t my-app .
+
+# --no-cache: Don't use cache when building
+docker build --no-cache -t my-app .
+
+# --target: Build specific stage in multi-stage Dockerfile
+docker build --target production -t my-app:prod .
+
+# --platform: Build for specific platform
+docker build --platform linux/amd64 -t my-app .
+```
+
+### Docker Image Management Commands
+
+```bash
+# List images with formatting
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+# -a, --all: Show all images (including intermediate)
+docker images -a
+
+# --filter: Filter images
+docker images --filter "dangling=true"        # Untagged images
+docker images --filter "before=postgres:13"   # Images created before
+docker images --filter "reference=python:*"   # Images matching pattern
+
+# Remove images
+docker rmi $(docker images -q --filter "dangling=true")  # Remove dangling images
+docker rmi -f image_name                      # Force remove
+```
+
+### Docker Container Management Commands
+
+```bash
+# List containers
+docker ps                    # Running containers only
+docker ps -a                 # All containers (running and stopped)
+docker ps -q                 # Quiet mode (only container IDs)
+docker ps --filter "status=exited"           # Filter by status
+docker ps --filter "ancestor=postgres:13"    # Filter by image
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# Container operations
+docker stop container_name          # Graceful stop (SIGTERM)
+docker kill container_name          # Force stop (SIGKILL)
+docker start container_name         # Start stopped container
+docker restart container_name       # Restart container
+docker pause container_name         # Pause container processes
+docker unpause container_name       # Unpause container
+
+# Remove containers
+docker rm container_name            # Remove stopped container
+docker rm -f container_name         # Force remove (stops if running)
+docker rm $(docker ps -aq)         # Remove all containers
+```
+
+### Docker Exec and Logs Commands
+
+```bash
+# Execute commands in running containers
+docker exec -it container_name bash           # Interactive bash session
+docker exec -u root container_name ls -la     # Run as specific user
+docker exec -w /app container_name pwd        # Run in specific directory
+docker exec -e VAR=value container_name env   # Set environment variable
+
+# View logs
+docker logs container_name                    # Show all logs
+docker logs -f container_name                 # Follow logs (tail -f)
+docker logs --tail 100 container_name         # Show last 100 lines
+docker logs --since "2024-01-01" container_name    # Logs since date
+docker logs --timestamps container_name       # Include timestamps
+```
+
+### Docker System and Cleanup Commands
+
+```bash
+# System information
+docker system df                    # Show Docker disk usage
+docker system info                  # Show system-wide information
+docker system events               # Show real-time events
+
+# Cleanup commands
+docker system prune                 # Remove unused containers, networks, images
+docker system prune -a              # Remove all unused images too
+docker system prune --volumes       # Include unused volumes
+docker container prune              # Remove stopped containers
+docker image prune                  # Remove dangling images
+docker image prune -a               # Remove unused images
+docker volume prune                 # Remove unused volumes
+docker network prune               # Remove unused networks
+```
+
+## Docker Compose Commands Reference
+
+### Basic Docker Compose Commands
+
+```bash
+# Start services
+docker-compose up                   # Start services in foreground
+docker-compose up -d                # Start services in background (detached)
+docker-compose up --build           # Build images before starting
+docker-compose up service_name      # Start specific service
+
+# Stop services
+docker-compose down                 # Stop and remove containers
+docker-compose down -v              # Also remove volumes
+docker-compose down --rmi all       # Also remove images
+docker-compose stop                 # Stop services without removing
+docker-compose stop service_name    # Stop specific service
+```
+
+### Docker Compose File Management
+
+```bash
+# -f, --file: Specify compose file
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up
+docker-compose -f production.yml up
+
+# -p, --project-name: Set project name
+docker-compose -p myproject up
+docker-compose --project-name data-pipeline up
+```
+
+### Service Management
+
+```bash
+# Scale services
+docker-compose up --scale worker=3           # Scale worker service to 3 instances
+docker-compose up --scale api=2 --scale worker=5
+
+# Restart services
+docker-compose restart                       # Restart all services
+docker-compose restart service_name          # Restart specific service
+
+# View service status
+docker-compose ps                           # Show running services
+docker-compose ps -a                        # Show all services
+docker-compose top                          # Show running processes
+```
+
+### Logs and Debugging
+
+```bash
+# View logs
+docker-compose logs                         # All service logs
+docker-compose logs service_name            # Specific service logs
+docker-compose logs -f                      # Follow logs
+docker-compose logs -f --tail=100           # Follow last 100 lines
+docker-compose logs --timestamps            # Include timestamps
+```
+
+### Build and Image Management
+
+```bash
+# Build services
+docker-compose build                        # Build all services
+docker-compose build service_name           # Build specific service
+docker-compose build --no-cache            # Build without cache
+docker-compose build --parallel            # Build in parallel
+
+# Pull images
+docker-compose pull                         # Pull all service images
+docker-compose pull service_name            # Pull specific service image
+```
+
+### Execution and Interaction
+
+```bash
+# Execute commands
+docker-compose exec service_name bash       # Interactive shell in service
+docker-compose exec -u root db psql         # Run as specific user
+docker-compose exec --index=2 worker bash   # Execute in specific scaled instance
+
+# Run one-off commands
+docker-compose run service_name command     # Run command in new container
+docker-compose run --rm service_name bash   # Run and remove container
+docker-compose run -e VAR=value service_name env  # Set environment variable
+```
+
+## Flag Categories Quick Reference
+
+### Prefix Types
+- **Single dash (-)**: Short form flags (e.g., `-d`, `-p`, `-v`)
+- **Double dash (--)**: Long form flags (e.g., `--detach`, `--publish`, `--volume`)
+- **No prefix**: Positional arguments (image names, commands)
+
+### Common Flag Patterns
+- **Resource flags**: `-m/--memory`, `--cpus`, `--memory-swap`
+- **Network flags**: `-p/--publish`, `--network`, `--add-host`
+- **Volume flags**: `-v/--volume`, `--mount`
+- **Environment flags**: `-e/--env`, `--env-file`
+- **Behavior flags**: `-d/--detach`, `-it`, `--rm`, `--restart`
+- **Filter flags**: `--filter` (used with ps, images, etc.)
+- **Output flags**: `-q/--quiet`, `--format`, `-a/--all`
+
+### Most Critical Flags for Data Engineers
+```bash
+# Essential container flags
+docker run -d --name postgres-db \
+  -p 5432:5432 \
+  -v postgres_data:/var/lib/postgresql/data \
+  -e POSTGRES_PASSWORD=secret \
+  --restart unless-stopped \
+  postgres:13
+
+# Essential compose flags
+docker-compose -f docker-compose.prod.yml up -d --build
+
+# Essential debugging flags
+docker logs -f --tail 100 container_name
+docker exec -it container_name bash
+```
+
+## Dockerfile Best Practices
+
+### Basic Structure
+```dockerfile
+# Use official base images
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies first (better caching)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first (leverage layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create non-root user
+RUN useradd -m -u 1000 dataeng && chown -R dataeng:dataeng /app
+USER dataeng
+
+# Expose port if needed
+EXPOSE 8000
+
+# Set entrypoint
+CMD ["python", "main.py"]
+```
+
+### Multi-stage Builds for Data Engineering
+```dockerfile
+# Build stage
+FROM python:3.9 as builder
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Production stage
+FROM python:3.9-slim
+WORKDIR /app
+COPY --from=builder /root/.local /root/.local
+COPY . .
+ENV PATH=/root/.local/bin:$PATH
+CMD ["python", "etl_pipeline.py"]
+```
+
+## Data Engineering Patterns
+
+### ETL Pipeline Container
+```dockerfile
+FROM python:3.9-slim
+
+# Install data engineering tools
+RUN pip install pandas numpy sqlalchemy psycopg2-binary
+
+# Copy ETL scripts
+COPY etl/ /app/etl/
+COPY config/ /app/config/
+
+WORKDIR /app
+
+# Environment variables for configuration
+ENV DB_HOST=localhost
+ENV DB_PORT=5432
+ENV DB_NAME=datawarehouse
+
+CMD ["python", "-m", "etl.main"]
+```
+
+### Apache Spark Container
+```dockerfile
+FROM bitnami/spark:3.3
+
+USER root
+
+# Install additional Python packages
+RUN pip install pandas pyarrow delta-spark
+
+# Copy Spark applications
+COPY spark_jobs/ /opt/spark_jobs/
+
+USER 1001
+
+ENTRYPOINT ["/opt/bitnami/spark/bin/spark-submit"]
+```
+
+## Docker Compose for Data Pipelines
+
+### Basic Data Stack
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: datawarehouse
+      POSTGRES_USER: dataeng
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  airflow-webserver:
+    image: apache/airflow:2.5.0
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://dataeng:password123@postgres/datawarehouse
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+    ports:
+      - "8080:8080"
+
+  etl-pipeline:
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: datawarehouse
+      DB_USER: dataeng
+      DB_PASSWORD: password123
+    volumes:
+      - ./data:/app/data
+
+volumes:
+  postgres_data:
+```
+
+### Kafka Data Streaming Stack
+```yaml
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.2.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.2.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-producer:
+    build:
+      context: ./producer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+  kafka-consumer:
+    build:
+      context: ./consumer
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+```
+
+## Volume Management
+
+### Volume Types
+```bash
+# Named volumes (managed by Docker)
+docker volume create data_volume
+docker run -v data_volume:/data postgres:13
+
+# Bind mounts (host directory)
+docker run -v /host/path:/container/path postgres:13
+docker run -v $(pwd)/data:/data postgres:13
+
+# Tmpfs mounts (memory)
+docker run --tmpfs /tmp postgres:13
+```
+
+### Data Persistence Patterns
+```yaml
+# In docker-compose.yml
+services:
+  postgres:
+    image: postgres:13
+    volumes:
+      # Named volume for database files
+      - postgres_data:/var/lib/postgresql/data
+      # Bind mount for initialization scripts
+      - ./init-scripts:/docker-entrypoint-initdb.d
+      # Bind mount for backups
+      - ./backups:/backups
+
+volumes:
+  postgres_data:
+    driver: local
+```
+
+## Networking
+
+### Network Types
+```bash
+# List networks
+docker network ls
+
+# Create custom network
+docker network create data_network
+
+# Run containers on custom network
+docker run --network data_network --name db postgres:13
+docker run --network data_network --name app my-app:latest
+```
+
+### Service Discovery
+```yaml
+# In docker-compose.yml - services can reach each other by name
+services:
+  database:
+    image: postgres:13
+    
+  application:
+    image: my-app:latest
+    environment:
+      # Use service name as hostname
+      DATABASE_HOST: database
+      DATABASE_PORT: 5432
+```
+
+## Common Data Engineering Docker Images
+
+### Databases
+```bash
+# PostgreSQL
+docker run -d --name postgres \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:13
+
+# MongoDB
+docker run -d --name mongo \
+  -p 27017:27017 \
+  mongo:5.0
+
+# Redis
+docker run -d --name redis \
+  -p 6379:6379 \
+  redis:7-alpine
+```
+
+### Processing Engines
+```bash
+# Apache Spark
+docker run -it --rm \
+  -p 8080:8080 \
+  -v $(pwd):/workspace \
+  bitnami/spark:3.3
+
+# Apache Flink
+docker run -it --rm \
+  -p 8081:8081 \
+  flink:1.15-java11
+```
+
+### Orchestration
+```bash
+# Apache Airflow
+docker run -d --name airflow \
+  -p 8080:8080 \
+  -v $(pwd)/dags:/opt/airflow/dags \
+  apache/airflow:2.5.0
+
+# Prefect
+docker run -d --name prefect \
+  -p 4200:4200 \
+  prefecthq/prefect:2.0-python3.9
+```
+
+## Performance Optimization
+
+### Resource Limits
+```yaml
+services:
+  data-processor:
+    image: my-processor:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+```
+
+### Dockerfile Optimization
+```dockerfile
+# Use specific versions
+FROM python:3.9.16-slim
+
+# Combine RUN commands to reduce layers
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && pip install pandas numpy \
+    && apt-get remove -y gcc \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use .dockerignore to exclude unnecessary files
+# Create .dockerignore file with:
+# __pycache__
+# *.pyc
+# .git
+# .pytest_cache
+# tests/
+```
+
+### Build Optimization
+```bash
+# Use build context efficiently
+docker build -t my-app .
+
+# Use multi-platform builds
+docker buildx build --platform linux/amd64,linux/arm64 -t my-app .
+
+# Use BuildKit for faster builds
+DOCKER_BUILDKIT=1 docker build -t my-app .
+```
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Container Won't Start
+```bash
+# Check logs
+docker logs container_name
+
+# Check exit code
+docker ps -a
+
+# Run in interactive mode for debugging
+docker run -it image_name bash
+```
+
+#### Permission Issues
+```bash
+# Check user inside container
+docker exec container_name id
+
+# Fix with proper user
+RUN useradd -m -u $(id -u) -g $(id -g) myuser
+USER myuser
+```
+
+#### Memory/Resource Issues
+```bash
+# Monitor resource usage
+docker stats
+
+# Set memory limits
+docker run -m 2g my-app
+
+# Clean up resources
+docker system prune -a
+```
+
+#### Networking Issues
+```bash
+# Test connectivity
+docker exec container_name ping other_container
+
+# Check port mapping
+docker port container_name
+
+# Inspect network configuration
+docker network inspect bridge
+```
+
+### Debugging Commands
+```bash
+# Interactive debugging
+docker run -it --rm --entrypoint bash image_name
+
+# Copy files from container
+docker cp container_name:/path/to/file ./local/path
+
+# Inspect image layers
+docker history image_name
+
+# View container processes
+docker exec container_name ps aux
+```
+
+## Quick Reference Commands
+
+### Daily Operations
+```bash
+# Start data stack
+docker-compose up -d
+
+# View all logs
+docker-compose logs -f
+
+# Scale service
+docker-compose up --scale worker=3
+
+# Stop everything
+docker-compose down
+
+# Update and restart service
+docker-compose pull service_name
+docker-compose up -d service_name
+
+# Clean up
+docker system prune
+docker volume prune
+```
+
+### Environment Variables
+```bash
+# Pass environment variables
+docker run -e DB_HOST=postgres -e DB_PORT=5432 my-app
+
+# Use .env file
+docker run --env-file .env my-app
+
+# In docker-compose.yml
+environment:
+  - DB_HOST=postgres
+  - DB_PORT=5432
+```
+
+This reference guide covers the essential Docker concepts and patterns specifically relevant to data engineering workflows. Use it as a quick reference during development and deployment of your data pipelines.
