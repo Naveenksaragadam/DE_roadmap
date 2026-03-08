@@ -7,6 +7,8 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../components/ui/Toast';
 import ProgressRing from '../components/ui/ProgressRing';
 import Confetti from '../components/ui/Confetti';
+import ConfidenceRating from '../components/ui/ConfidenceRating';
+import TopicNotes from '../components/ui/TopicNotes';
 
 function getIcon(name) {
   const f = name.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
@@ -19,7 +21,7 @@ const fadeUp = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 } }
 export default function TierPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { state, toggleSection, toggleTopic } = useApp();
+  const { state, toggleSection, toggleTopic, startTimer } = useApp();
   const { addToast } = useToast();
 
   const tierIndex = roadmapData.findIndex(t => t.id === id);
@@ -36,6 +38,17 @@ export default function TierPage() {
     const completed = tier.sections.filter((_, si) => state.progress[`${tierIndex}-${si}`]).length;
     return { completed, total, percent: total > 0 ? Math.round((completed / total) * 100) : 0 };
   }, [tier, tierIndex, state.progress]);
+
+  // Compute total study time per topic from logs
+  const topicStudyTime = useMemo(() => {
+    const times = {};
+    Object.values(state.studyLogs).forEach(logs => {
+      logs.forEach(log => {
+        times[log.topicKey] = (times[log.topicKey] || 0) + (log.duration || 0);
+      });
+    });
+    return times;
+  }, [state.studyLogs]);
 
   const handleSection = (key, title) => {
     const willComplete = !state.progress[key];
@@ -135,19 +148,42 @@ export default function TierPage() {
                     {sec.topics.map((topic, idx) => {
                       const tKey = `${tierIndex}-${si}-${idx}`;
                       const tDone = state.topicProgress[tKey];
+                      const studyMins = topicStudyTime[tKey] || 0;
                       return (
-                        <div key={idx}
-                          className="flex items-start gap-2.5 py-2 px-3 rounded-lg cursor-pointer transition-colors"
-                          style={{ background: tDone ? 'var(--success-subtle)' : 'transparent' }}
-                          onClick={() => toggleTopic(tKey)}>
-                          <div className={`checkbox ${tDone ? 'checked' : ''}`}
-                            style={tDone ? { background: `var(--tier-${tierIndex + 1})`, borderColor: `var(--tier-${tierIndex + 1})` } : { width: 18, height: 18, borderRadius: 5 }}>
-                            {tDone ? '✓' : ''}
+                        <div key={idx} className="rounded-lg transition-colors"
+                          style={{ background: tDone ? 'var(--success-subtle)' : 'transparent' }}>
+                          {/* Topic Row */}
+                          <div className="flex items-start gap-2.5 py-2 px-3 cursor-pointer"
+                            onClick={() => toggleTopic(tKey)}>
+                            <div className={`checkbox ${tDone ? 'checked' : ''}`}
+                              style={tDone ? { background: `var(--tier-${tierIndex + 1})`, borderColor: `var(--tier-${tierIndex + 1})` } : { width: 18, height: 18, borderRadius: 5 }}>
+                              {tDone ? '✓' : ''}
+                            </div>
+                            <span className={`text-sm flex-1 ${tDone ? 'line-through' : ''}`}
+                              style={{ color: tDone ? 'var(--text-muted)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
+                              {topic}
+                            </span>
+                            <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                              {studyMins > 0 && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                                  style={{ background: 'var(--accent-subtle)', color: 'var(--accent-text)', fontFamily: 'var(--font-mono)' }}>
+                                  {studyMins}m
+                                </span>
+                              )}
+                              <ConfidenceRating topicKey={tKey} size={12} />
+                              <button
+                                onClick={() => startTimer(tKey, topic.substring(0, 60))}
+                                className="p-1 rounded-md border-0 bg-transparent cursor-pointer transition-all hover:scale-110"
+                                title="Start studying this topic"
+                                style={{ color: 'var(--accent-text)' }}>
+                                <Icons.Play size={13} />
+                              </button>
+                            </div>
                           </div>
-                          <span className={`text-sm ${tDone ? 'line-through' : ''}`}
-                            style={{ color: tDone ? 'var(--text-muted)' : 'var(--text-secondary)', lineHeight: 1.5 }}>
-                            {topic}
-                          </span>
+                          {/* Inline Notes */}
+                          <div className="px-3 pb-2">
+                            <TopicNotes topicKey={tKey} />
+                          </div>
                         </div>
                       );
                     })}
@@ -171,3 +207,4 @@ export default function TierPage() {
     </motion.div>
   );
 }
+

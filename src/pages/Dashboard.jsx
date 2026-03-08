@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Flame, TrendingUp, Target, CheckCircle } from 'lucide-react';
+import { Flame, TrendingUp, Target, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useProgress } from '../hooks/useProgress';
 import ProgressRing from '../components/ui/ProgressRing';
+import { roadmapData } from '../data/roadmapData';
 
 const fadeUp = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 } };
 
@@ -41,13 +43,16 @@ const ChartTooltip = ({ active, payload }) => {
     const d = payload[0].payload;
     return (
       <div className="card px-3 py-2 text-xs" style={{ borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)' }}>
-        <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{d.name}</div>
-        <div className="text-caption">{d.completed}/{d.total} sections</div>
+        <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>{d.name || d.date}</div>
+        <div className="text-caption">{d.completed !== undefined ? `${d.completed}/${d.total} sections` : `${d.minutes}m studied`}</div>
       </div>
     );
   }
   return null;
 };
+
+// Confidence colors
+const confColors = { 0: 'var(--bg-inset)', 1: '#ef4444', 2: '#f97316', 3: '#eab308', 4: '#22c55e', 5: '#10b981' };
 
 export default function Dashboard() {
   const { state } = useApp();
@@ -57,6 +62,52 @@ export default function Dashboard() {
     name: tp.label, completed: tp.completed,
     remaining: tp.total - tp.completed, total: tp.total, color: tp.color,
   }));
+
+  // Study time per day (last 14 days)
+  const dailyStudyData = useMemo(() => {
+    const days = [];
+    const today = new Date();
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const logs = state.studyLogs[dateStr] || [];
+      const minutes = logs.reduce((sum, l) => sum + (l.duration || 0), 0);
+      days.push({
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        minutes,
+      });
+    }
+    return days;
+  }, [state.studyLogs]);
+
+  // Confidence heatmap data
+  const confidenceGrid = useMemo(() => {
+    const grid = [];
+    roadmapData.forEach((tier, ti) => {
+      tier.sections.forEach((sec, si) => {
+        sec.topics.forEach((topic, idx) => {
+          const key = `${ti}-${si}-${idx}`;
+          grid.push({
+            key,
+            topic: topic.substring(0, 40),
+            section: sec.title,
+            tier: tier.tier,
+            confidence: state.confidence[key] || 0,
+            color: tier.color,
+          });
+        });
+      });
+    });
+    return grid;
+  }, [state.confidence]);
+
+  // Weakest topics
+  const weakTopics = useMemo(() => {
+    return confidenceGrid
+      .filter(t => t.confidence > 0 && t.confidence <= 2)
+      .slice(0, 5);
+  }, [confidenceGrid]);
 
   return (
     <motion.div initial="initial" animate="animate" variants={{ animate: { transition: { staggerChildren: 0.06 } } }}>
@@ -109,20 +160,82 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* Chart */}
+      {/* Study Time Chart */}
       <motion.div variants={fadeUp} className="card p-6 mb-8">
-        <h3 className="heading-md mb-5">Tier breakdown</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData} barCategoryGap="20%">
-            <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+        <div className="flex items-center gap-2 mb-5">
+          <Clock size={16} style={{ color: 'var(--accent-text)' }} />
+          <h3 className="heading-md m-0">Study Time (Last 14 Days)</h3>
+        </div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={dailyStudyData} barCategoryGap="15%">
+            <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip content={<ChartTooltip />} cursor={false} />
-            <Bar dataKey="completed" radius={[6, 6, 0, 0]} maxBarSize={36}>
-              {chartData.map((e, i) => <Cell key={i} fill={e.color} />)}
-            </Bar>
-            <Bar dataKey="remaining" radius={[6, 6, 0, 0]} maxBarSize={36} fill="var(--bg-inset)" />
+            <Bar dataKey="minutes" radius={[6, 6, 0, 0]} maxBarSize={28} fill="var(--accent)" />
           </BarChart>
         </ResponsiveContainer>
+      </motion.div>
+
+      {/* Tier Breakdown + Weak Topics */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <motion.div variants={fadeUp} className="card p-6">
+          <h3 className="heading-md mb-5">Tier Breakdown</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData} barCategoryGap="20%">
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} />
+              <YAxis hide />
+              <Tooltip content={<ChartTooltip />} cursor={false} />
+              <Bar dataKey="completed" radius={[6, 6, 0, 0]} maxBarSize={36}>
+                {chartData.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Bar>
+              <Bar dataKey="remaining" radius={[6, 6, 0, 0]} maxBarSize={36} fill="var(--bg-inset)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="card p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <AlertTriangle size={16} style={{ color: 'var(--tier-1)' }} />
+            <h3 className="heading-md m-0">Weakest Topics</h3>
+          </div>
+          {weakTopics.length === 0 ? (
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Rate your confidence on topics to see your weak areas here.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {weakTopics.map(t => (
+                <div key={t.key} className="flex items-center gap-3 p-3 rounded-lg"
+                  style={{ background: 'var(--bg-inset)', border: '1px solid var(--border-subtle)' }}>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: confColors[t.confidence] }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{t.topic}</div>
+                    <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{t.section} · {t.tier}</div>
+                  </div>
+                  <span className="text-xs font-bold" style={{ color: confColors[t.confidence], fontFamily: 'var(--font-mono)' }}>
+                    {t.confidence}/5
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
+
+      {/* Confidence Heatmap */}
+      <motion.div variants={fadeUp} className="card p-6 mb-8">
+        <h3 className="heading-md mb-3">Confidence Map</h3>
+        <p className="text-caption mb-4">Each dot is a topic. Gray = unrated, Red → Green = confidence level.</p>
+        <div className="flex flex-wrap gap-1">
+          {confidenceGrid.map(t => (
+            <div key={t.key} title={`${t.topic} (${t.section}) — ${t.confidence}/5`}
+              className="w-3 h-3 rounded-sm transition-colors"
+              style={{
+                background: confColors[t.confidence],
+                border: `1px solid ${t.confidence > 0 ? confColors[t.confidence] : 'var(--border-default)'}`,
+              }} />
+          ))}
+        </div>
       </motion.div>
 
       {/* Recently Completed */}
@@ -149,3 +262,4 @@ export default function Dashboard() {
     </motion.div>
   );
 }
+
