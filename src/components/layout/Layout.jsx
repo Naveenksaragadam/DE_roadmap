@@ -14,6 +14,7 @@ const navItems = [
   { path: '/dashboard', label: 'Dashboard' },
   { path: '/log', label: 'Log' },
   { path: '/resources', label: 'Resources' },
+  { path: '/crash-course', label: 'Notes' },
   { path: '/interview', label: 'Interview' },
 ];
 

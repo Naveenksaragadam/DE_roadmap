@@ -13,6 +13,7 @@ const Resources = lazy(() => import('./pages/Resources'));
 const InterviewPrep = lazy(() => import('./pages/InterviewPrep'));
 const Today = lazy(() => import('./pages/Today'));
 const StudyLog = lazy(() => import('./pages/StudyLog'));
+const CrashCourse = lazy(() => import('./pages/CrashCourse'));
 
 function LoadingFallback() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/log" element={<StudyLog />} />
                 <Route path="/resources" element={<Resources />} />
                 <Route path="/interview" element={<InterviewPrep />} />
+                <Route path="/crash-course" element={<CrashCourse />} />
               </Route>
             </Routes>
           </Suspense>
